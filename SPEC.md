@@ -184,7 +184,7 @@ request this capability only if the Connector needs to configure its runtime.
 | `channel.attachments` | `POST /api/attachments`, `GET /api/attachments/{id}/content`; message `attachmentIds` |
 | `channel.metadata` | message `kind`, `label`, `process`, `runtimeActivity`, `proactive`; the corresponding PATCH metadata |
 | `runtime.manage` | `GET /api/connector/runtime/inbox`, `POST /api/connector/runtime/report`, `POST /api/connector/runtime/requests/{id}/result`, `GET /api/connector/runtime/connections`, `POST /api/connector/runtime/connections/ack` |
-| `coding.sessions` | `POST /api/connector/coding/connect`, `POST /api/connector/coding/session`, `POST /api/connector/coding/queue/claim`, coding side-conversation poll/result; inbox `runtimeInstanceId` or `codingInstanceId`; delivery ACK `requeue` |
+| `coding.sessions` | `POST /api/connector/coding/connect`, `POST /api/connector/coding/session`, `POST /api/connector/coding/queue/claim`, coding side-conversation poll/result; inbox `runtimeInstanceId` or `codingInstanceId`; delivery ACK `requeue`; conversation creation `projectId` |
 | `coding.actions` | `GET /api/connector/coding/inbox`, `POST /api/connector/coding/actions/{id}/result` |
 | `coding.approvals` | `POST /api/connector/coding/approvals`, `POST /api/connector/coding/approvals/{id}/resolve` |
 | `native.sessions` | `POST /api/connector/native/catalog`, `POST /api/connector/native/created`, `GET /api/connector/native/bindings`, `POST /api/connector/native/bindings/{id}/ingest`, `POST /api/connector/native/bindings/{id}/state` |
@@ -198,6 +198,14 @@ The public TypeScript `contracts/` directory contains the exact request/response
 structures for these extensions; it has no Hub implementation dependency. The
 Hub rejects unknown request fields, invalid native IDs, foreign conversation
 references and mismatched delivery/action/binding ownership.
+
+A Connector approved for both `conversation.create` and `coding.sessions` may
+include `projectId` when creating a conversation. Hub validates that the project
+is currently registered and available to this authenticated Agent, applies the
+owner's runtime-management and maintenance constraints, and binds the new
+conversation to that project. A foreign or unavailable project is rejected;
+reusing `clientConversationId` with a different project is a conflict. Connectors
+without `coding.sessions` must omit `projectId`.
 
 Coding connect registers `{instanceId,version,account,projects}`. This native
 runtime **epoch** is independent of the NCP process lease UUID. Every subsequent
