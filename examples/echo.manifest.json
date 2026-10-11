@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "org.example.nilo-echo",
+  "name": "Independent Echo Connector",
+  "version": "0.1.0",
+  "protocol": {"major": 1, "minor": 0},
+  "capabilities": ["channel.receive", "channel.send"]
+}

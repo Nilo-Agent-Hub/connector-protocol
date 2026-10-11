@@ -1,0 +1,343 @@
+# Nilo Connector Protocol 1.1 — hub-http-v1
+
+This document describes the implemented NCP 1.1 profile with text channels and capability-gated extensions. An
+independent executable can connect without importing Hub or Link internals or
+being added to a vendor allowlist. The declaration, examples and Python reference
+client in this directory are MIT licensed; implementations may remain proprietary.
+Preparing this directory for publication does not publish the private Hub repository.
+
+Hub authenticates and routes messages. Link can install and supervise a local
+executable and give it one agent's credential. A connector translates this API
+to its upstream agent. A channel is a stable Hub conversation ID. Native upstream
+session IDs are opaque identities in the optional native/coding extensions;
+vendor implementation details remain inside each Connector.
+
+## Declaration and approval
+
+The complete declaration is described by [manifest.schema.json](manifest.schema.json):
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "org.example.echo",
+  "name": "Example Echo",
+  "version": "1.0.0",
+  "protocol": {"major": 1, "minor": 1},
+  "capabilities": ["channel.receive", "channel.send"]
+}
+```
+
+IDs use at least three lowercase, dot-separated components with optional
+internal hyphens. IDs are self-declared names, not proof of domain ownership or
+publisher identity. Names have 1–80 Unicode code points, no control characters,
+and no leading/trailing whitespace. Versions use three numeric components and
+an optional prerelease suffix; build metadata is not accepted in this version.
+Protocol major 1 and minor 0 or 1 are accepted. Minor 1 enables the extension capabilities listed below. Unknown declaration fields,
+unknown capabilities, and duplicate capabilities are rejected.
+
+Both `channel.receive` and `channel.send` are required. These optional permissions
+are individually enforced by Hub:
+
+| Capability | Additional access |
+| --- | --- |
+| `channel.stream` | Send streaming messages and replace their text |
+| `conversation.create` | Create conversations for this agent |
+| `profile.write` | Update this agent's display name and built-in avatar/emoji |
+
+A declaration is an access request. The owner reviews the exact declaration
+during pairing. Its ID, name, version, protocol and capability set are immutable
+for that paired identity. A different version or permission set requires a new
+pairing. Capability order has no meaning. Rotating/revoking the message token
+does not remove the approved declaration or convert it to an unrestricted agent.
+
+## Pairing
+
+Pairing uses JSON requests with `Content-Type: application/json`. Credentials
+must only cross HTTPS, except local loopback development. Never print tokens or
+put them in URLs, command-line arguments, or package manifests.
+
+1. Generate a random UUID `requestId` and a secret verifier: at least 32 random
+   bytes encoded as unpadded base64url (43–128 characters). `challenge` is the
+   lowercase hex SHA-256 of the verifier's **encoded string**.
+2. `POST /api/pairing/request` with `requestId`, `challenge`, `kind:"custom"`,
+   `deviceName`, and `connector` (the declaration). The response contains
+   `sessionId`, `status`, `expiresAt`, and `pollIntervalSeconds` (3).
+3. Open `/?pairing=1&pairingSession={sessionId}` in the owner's authenticated Hub browser. Show the
+   local verification code described below. The owner checks the declaration
+   and device and types the code. A request has no tenant until this approval.
+4. Poll `POST /api/pairing/status` with
+   `{sessionId,requestId,verifier}`. Exchange approved requests using
+   `POST /api/pairing/exchange` with the same proof. Pending exchanges return 202.
+   A successful exchange returns `status:"exchanged"`, `agent` including its
+   `id`, `kind:"custom"` and `connector`, and
+   `credentials:{messageToken:"…"}`. If the declaration includes `runtime.manage`, the owner must have maintenance permission and exchange returns an independent `managementToken`; it is delivered through the private Link bootstrap and sent as `X-Agent-Inbox-Management-Token` on management calls. The message and management credentials are always checked independently.
+5. Persist the credential privately, then `POST /api/pairing/ack` with the same
+   proof. Exchange recovery is available until `recoveryExpiresAt`; ACK ends
+   credential delivery recovery. Expired/cancelled sessions return 410.
+
+To derive the local verification code, SHA-256 hash the UTF-8 string
+`nilo-pairing-verify:` followed by the lowercase hex challenge. Map each of the
+first six bytes modulo 32 into `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`, then display
+three characters, a hyphen, and three characters. The server never exposes this
+code through the owner lookup API.
+
+Owner-created pairing is also supported: the owner creates a session using
+`POST /api/pairing/sessions` with `{}` and gives the device its eight-character
+code. The device uses `POST /api/pairing/claim` with the declaration fields above
+and `code`. Explicit browser approval still follows, but a typed verification
+code is only required for device-initiated sessions.
+
+The authenticated owner GETs `/api/pairing/sessions/{sessionId}` to display the
+immutable `connector` and obtain its opaque `connectorDigest`. Approval POSTs
+`requestId`, `verificationCode` (device initiation) and the returned
+`connectorDigest` to `/api/pairing/sessions/{sessionId}/approve`. Clients should
+round-trip the digest rather than reimplement its canonicalization. Old clients
+that omit it cannot silently approve an NCP identity.
+
+## Handshake and lease
+
+All connector calls carry `Authorization: Bearer <messageToken>`. First send:
+
+```http
+POST /api/connector/handshake
+Content-Type: application/json
+
+{"connector":{...approved declaration...},"instanceId":"<fresh UUID>"}
+```
+
+The 200 response contains `protocol`, `agentId`, the approved `connector`,
+`instanceId`, `leaseExpiresAt` (RFC 3339), and `heartbeatIntervalSeconds` (30).
+Use a canonical lowercase UUID, nonzero, newly generated for each process run.
+Handshake requires no instance header; other connector calls require exactly
+one `X-Nilo-Connector-Instance` header containing that UUID.
+
+The lease lasts 90 seconds. `POST /api/connector/heartbeat` with `{}` renews it
+and returns the same session shape. Heartbeat work must continue during upstream
+execution. `POST /api/connector/disconnect` with `{}` returns 204 and permanently
+retires that instance ID. A stopped process cannot revive its disconnected ID.
+
+Retrying a handshake for the current instance renews the lease, including after
+expiry if another instance has not taken over. A different instance gets 409
+while the current lease is live; after expiry it may acquire a lease. Once
+replaced, an old instance cannot handshake again even after the successor stops.
+Token rotation/revocation invalidates the current lease and retires its ID.
+
+Every tenant write checks the lease and current credential inside the same
+transaction that serializes with takeover/revocation. A delayed request from a
+retired process cannot mutate data after a successor acquires the lease. This
+fences Hub requests; it cannot cancel an upstream tool call already in progress.
+The connector must reconcile any uncertain upstream outcome itself.
+
+## Text channels
+
+Requests use JSON. Unknown request fields and all unlisted connector routes are
+denied for an NCP identity, unless its corresponding capability is approved. Provider-specific compatibility paths are aliases to capability-gated coding/runtime routes; attachment, native session, file, media, question, sticker and process metadata access require their explicit NCP 1.1 capabilities. Omitting the instance
+header never grants the legacy profile. Response objects may contain additional
+Hub display metadata; implementations should ignore unknown response fields.
+
+| Request | Body / parameters | Result |
+| --- | --- | --- |
+| `GET /api/connector/profile` | No body | Current agent profile |
+| `GET /api/connector/inbox` | `wait=0..20`, `pollId=<durable UUID>` | 200 `{deliveries:[…],protocolVersion:1,agent:{id:…},maintenance:false}` |
+| `POST /api/connector/deliveries/{id}/ack` | `{ok:boolean,error?:string,uncertain?:boolean}` | 204 |
+| `POST /api/connector/conversations/{id}/messages` | `{text:string,clientMessageId:string,streaming?:boolean}` | 201 message |
+| `PATCH /api/connector/messages/{id}` | `{text:string,streaming?:boolean}`; requires `channel.stream` | 200 message |
+| `POST /api/connector/conversations` | `{title:string,clientConversationId?:string}`; requires `conversation.create` | 201 conversation |
+| `PATCH /api/connector/profile` | `{name?:string,avatarEmoji?:string,avatarPreset?:string}`; requires `profile.write` | 200 profile |
+
+Each delivery contains `id`, `conversation` (including its stable `id`),
+`message` (including `id`, `text`, `role`, `seq`) and up to 40 prior delivered
+chat messages in `history`, oldest first. A poll returns at most ten deliveries.
+The connector may only ACK its own agent's deliveries and send/patch messages
+in conversations belonging to that same agent. Tenant IDs are never supplied
+by the connector. PostgreSQL tenant isolation applies to all data access.
+
+Text must be nonblank. Streaming starts with a nonblank POST and `streaming:true`.
+The base text profile supplies the **entire current text** on PATCH; finish with
+`{text:"complete reply",streaming:false}`. NCP 1.1 additionally accepts `delta`.
+`process`, `kind` and `runtimeActivity` require `channel.metadata`;
+`final` and unlisted implementation fields are not accepted.
+Send stream patches serially: this full-text profile has no revision precondition
+or out-of-order merge guarantee. Replaying an old patch after a newer patch can
+overwrite the newer text. A non-streaming connector cannot use PATCH.
+
+The owner creates a conversation from the connected agent in Hub, or a connector
+with `conversation.create` creates one. Persist and reuse `clientConversationId`
+to recover a lost creation response; the same key returns the same conversation.
+Attachment IDs require `channel.attachments`; local file transfer requires `files.read`/`files.write`; native session catalog and coding/runtime operations require `native.sessions`/`coding.*`/`runtime.manage`; media, questions and stickers require their named capabilities.
+
+Handshake must happen before the owner sends input. Hub's existing presence
+window is 35 seconds; heartbeat/poll traffic keeps it current. Text submitted
+while the agent is offline is stored as failed and requires an owner retry
+after reconnection. It is not silently queued for a future connector process.
+
+## NCP 1.1 extensions
+
+Each extension requires its immutable manifest capability. The management-related
+rows additionally require `runtime.manage` and the independent
+`X-Agent-Inbox-Management-Token`. A message token never grants management access.
+Management access includes explicitly configured model connection credentials:
+request this capability only if the Connector needs to configure its runtime.
+
+| Capability | Routes / additional fields |
+| --- | --- |
+| `channel.attachments` | `POST /api/attachments`, `GET /api/attachments/{id}/content`; message `attachmentIds` |
+| `channel.metadata` | message `kind`, `label`, `process`, `runtimeActivity`, `proactive`; the corresponding PATCH metadata |
+| `runtime.manage` | `GET /api/connector/runtime/inbox`, `POST /api/connector/runtime/report`, `POST /api/connector/runtime/requests/{id}/result`, `GET /api/connector/runtime/connections`, `POST /api/connector/runtime/connections/ack` |
+| `coding.sessions` | `POST /api/connector/coding/connect`, `POST /api/connector/coding/session`, `POST /api/connector/coding/queue/claim`, coding side-conversation poll/result; inbox `runtimeInstanceId` or `codingInstanceId`; delivery ACK `requeue` |
+| `coding.actions` | `GET /api/connector/coding/inbox`, `POST /api/connector/coding/actions/{id}/result` |
+| `coding.approvals` | `POST /api/connector/coding/approvals`, `POST /api/connector/coding/approvals/{id}/resolve` |
+| `native.sessions` | `POST /api/connector/native/catalog`, `POST /api/connector/native/created`, `GET /api/connector/native/bindings`, `POST /api/connector/native/bindings/{id}/ingest`, `POST /api/connector/native/bindings/{id}/state` |
+| `files.write` | `POST /api/connector/conversations/{id}/files` registers a local file belonging to an Agent conversation |
+| `files.read` | file-transfer poll/content/error and file-reference result routes under `/api/connector/`; owner file policy and per-request transfer ownership still apply |
+| `media.generate` | image-generation and speech-generation capability/job/result routes under `/api/connector/` |
+| `questions` | conversation question create/list and `/api/connector/questions/{id}/resolve` |
+| `stickers` | sticker list/register and message `stickerId` / `stickerImage` |
+
+The public TypeScript `contracts/` directory contains the exact request/response
+structures for these extensions; it has no Hub implementation dependency. The
+Hub rejects unknown request fields, invalid native IDs, foreign conversation
+references and mismatched delivery/action/binding ownership.
+
+Coding connect registers `{instanceId,version,account,projects}`. This native
+runtime **epoch** is independent of the NCP process lease UUID. Every subsequent
+native/coding call proves that current epoch; a replacement native epoch retires
+prior sessions, approvals and pending actions. The outer NCP lease header is
+required throughout and checked again inside the database transaction.
+
+Native catalog `provider` is an implementation-defined identifier matching
+`^[a-z0-9][a-z0-9._-]{0,127}$`, not a vendor enumeration. Catalog identities are
+scoped by authenticated tenant + Agent + sourceKey + sessionRef. A registered
+source/session identity cannot silently change its provider. Importing existing
+history requires an owner-created binding. Creation confirmation additionally
+requires the conversation's first delivered input and matching registered project;
+an arbitrary session reference cannot import unrelated history.
+
+Runtime reports use `runtimeInstanceId` for the native epoch. Required report
+fields remain `conversationId`, `runtimeVersion`, `capabilities`, `model`,
+`lastUsedModel`, `models`, `busy`, `usage`, `skills`, `mcp`, and `files`.
+`capabilities.createSession` controls creation of unbound Hub conversations;
+`steerInput` controls adding input to a running turn. `sideConversation` may be
+`ephemeral` or `inline`. These reports describe supported behavior; they cannot
+expand the manifest's approved access.
+
+Generic settings reports have this shape:
+
+```json
+{"settings":{"values":{"mode":"safe"},"allowed":{"mode":["safe","fast"]},"source":"runtime"}}
+```
+
+Setting keys match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$`, with at most 64 keys.
+Values are JSON null, booleans, finite numbers, or strings up to 1024 bytes.
+Each `allowed` list has 1–64 scalar choices. `source` is `runtime` or `defaults`.
+The owner submits a normal runtime request with `kind:"update-settings"` and
+`payload:{settings:{mode:"fast"}}`. Hub admits only choices in the reported
+`allowed` sets, and successful completion must report `source:"runtime"` and
+the requested actual values. Arbitrary opaque configuration cannot pass through.
+
+`runtimeUpdate` is the provider-independent runtime update report. All fields are
+required: `supported` (boolean), `reason` (null or `disabled`,
+`unsupported-platform`, `unavailable`), `status` (`idle`, `updating`, `restarting`,
+`verifying`, `succeeded`, `unchanged`, `failed`, `uncertain`), `operationId`
+(null or UUID), `fromVersion` / `toVersion` (null or semantic versions),
+`error` (null or bounded string), and `updatedAt` (RFC 3339). Owner request
+`kind:"update-runtime"` requires maintenance permission. Admission requires an
+idle runtime, no live sessions/actions and explicit update support. Success is
+accepted only with a matching operation ID, actual running version and consistent
+from/to versions. An uncertain update must be inspected; it is not automatically
+replayed. This updates the upstream runtime, not the pinned Connector package.
+
+Compatibility aliases `/api/connector/codex/*`, old branded report/settings
+fields, and legacy signed Connector update operations remain available for
+installed clients. They use the same capability boundary once an identity
+handshakes. New implementations use the generic routes and fields above.
+
+An existing legacy credential can make a one-way NCP handshake binding. It may
+only narrow its existing profile; requesting `runtime.manage` also proves the
+pre-existing independent management token. This path never mints management
+credentials or removes an existing manifest. Once bound, omitting the NCP header
+cannot restore legacy access. Newly paired Connectors always require explicit
+manifest approval, including its opaque digest.
+
+## Delivery recovery and idempotency
+
+Persist `pollId` **before** polling, and keep it until the entire batch is durably
+settled. Reusing it replays still-dispatched, unacknowledged deliveries from that
+batch. Acknowledged deliveries are excluded. New keys only claim pending work;
+they do not automatically recover a batch associated with a lost poll ID.
+
+Hub expires pending or dispatched NCP deliveries after 300 seconds, measured
+from dispatch when dispatched, otherwise from creation. Heartbeats do not extend
+this delivery deadline. For long work, persist upstream acceptance and ACK
+promptly, then send results asynchronously. The bundled synchronous runner is a
+short-work reference, not a general long-running job executor.
+
+Persist each delivery ID, upstream execution state and outbound reply key before
+performing effects. ACK `ok:true` means the connector accepted responsibility for
+the input; it need not imply the complete agent turn has finished. ACK
+`ok:false` records failure, with `error` suitable for the owner. Use
+`uncertain:true` with `ok:false` and a clear error when execution may have begun.
+For text channels the visible projection is a failed delivery with its error;
+there is no separate durable upstream reconciliation API in this profile.
+Repeated ACKs of the same terminal outcome succeed; contradictory terminal
+outcomes fail. An expired/otherwise settled delivery may return 409.
+
+Replies require a stable `clientMessageId` scoped to conversation and role.
+Repeating a send with the same key and text returns the existing message;
+changing text under an existing key returns 409 (use PATCH for streaming).
+A response includes the stable server message `id`. Persist prepared reply
+content and its key before sending so a lost response is safely retried.
+
+Hub delivery identity plus local journaling can prevent duplicate reply creation
+and avoid blindly repeating uncertain work. This is **not** an exactly-once
+guarantee for upstream execution: a process may crash between an external side
+effect and its local durable record. Retrying upstream execution requires an
+upstream idempotency key, durable receipt, or explicit reconciliation. A timeout
+alone never proves that execution did not start.
+
+## Errors and compatibility
+
+Errors have `{error:"machine_readable_code",message:"display text"}`. Treat `error` as machine-readable and the
+message as display text; do not log credential-bearing request bodies.
+
+| Status / code | Meaning |
+| --- | --- |
+| 400 `connector_manifest_invalid` | Unsupported/invalid handshake declaration |
+| 400 `connector_extension_unsupported` | Unsupported body field or inbox parameter |
+| 401 `session_expired` / `unauthorized` | Token missing, invalid, disabled or revoked |
+| 403 `connector_approval_mismatch` | Handshake differs from the owner-approved declaration |
+| 403 `connector_capability_denied` | Route or capability was not approved |
+| 409 `connector_instance_busy` | Another instance has a live lease |
+| 409 `connector_instance_invalid` | Missing, expired, disconnected or retired instance |
+| 409 `message_create_failed` / `conflict` | Ownership, idempotency or delivery state conflict |
+
+An operation racing lease expiry may also fail through its existing endpoint's
+401/409/500 error path; it does not acquire permission to bypass fencing. Stop
+using retired credentials/instances; do not retry them indefinitely. Retry
+transport failures using the same durable operation identifiers. A new
+capability or minor version needs explicit Hub support before it can be paired.
+
+Existing official connectors keep their existing compatibility profiles and
+credentials. NCP capabilities are separate from vendor/AgentKind enums: new
+implementations use `kind:"custom"` plus their namespaced declaration. NCP 1.1 advertises rich capability extensions without provider enums. `runtime.manage` is an independently gated management grant; the Hub never treats a message token as a management token.
+
+## Security boundary
+
+Hub capabilities limit what the credential can do on Hub. They do not sandbox
+the executable on the user's computer. Independently implemented closed-source
+connectors, including those using private upstream interfaces, are permitted by
+this protocol but do not gain official trust through conformance.
+
+Link package import requires a pinned executable digest and explicit trust.
+Verify the digest through an independent publisher channel before approval.
+This initial distribution mechanism is not a public key signature registry,
+publisher vetting service, or OS sandbox. A trusted executable runs with the
+local user's permissions and can access that user's local data. Use separate
+OS accounts/containers if stronger execution isolation is required.
+
+The NCP credential grants access to all text channels belonging to its paired
+agent. Keep it in private local storage and pass it through Link's stdin
+bootstrap, not environment inheritance or argv. Keep local state private, bind
+it to Hub origin plus agent and connector identity, and use an exclusive journal
+lock. Revoking the agent's message token stops future Hub access but cannot erase
+data an executable already read or stop an already-submitted upstream operation.
