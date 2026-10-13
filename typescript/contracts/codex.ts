@@ -50,7 +50,7 @@ export interface CodingInputQueue {
   heldIds?: string[];
 }
 export interface CodexView {
-  inputCapabilities?: { queue: boolean; skills: boolean };
+  inputCapabilities?: { queue: boolean; skills: boolean; steer?: boolean };
   inputQueue?: CodingInputQueue;
   enabled: boolean; online: boolean; version: string | null;
   account: 'apiKey' | 'chatgpt' | 'external' | 'missing' | 'unknown';
