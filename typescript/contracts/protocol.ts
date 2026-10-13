@@ -185,6 +185,8 @@ export interface Message {
   tool?: { name: string; input?: string; output?: string };
   codexApprovalId?: string;
   questionRequestId?: string;
+  question?: import('./questions.js').MessageQuestion;
+  questionAnswer?: import('./questions.js').MessageQuestionAnswer;
   input?: CodingInput;
 }
 export interface Delivery {

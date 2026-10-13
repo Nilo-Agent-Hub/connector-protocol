@@ -21,6 +21,8 @@ export interface CodexApproval {
   /** Nonblocking questions remain answerable across turns of the same thread. */
   blocking?: boolean;
   source?: 'rpc' | 'agent-message';
+  /** Gateway-negotiated original message client key; only for async agent messages. */
+  sourceMessageKey?: string;
   scope?: 'once' | 'turn';
   id: string; conversationId: string; threadId: string; turnId: string;
   kind: 'command' | 'file-change' | 'permissions' | 'user-input';
