@@ -27,10 +27,12 @@ export interface AvatarProfile {
 }
 export type AvatarPatch = { avatarAttachmentId: string | null } | { avatarEmoji: string | null } | { avatarPreset: AvatarPreset | null };
 export interface AccountAvatarProfile extends AvatarProfile { avatarVersion: number | null }
-/** Owner-maintained machine directory; addresses are optional display metadata. */
+/** Runtime machine identity with an editable display name and reported host names. */
 export interface RuntimeMachine {
   id: string;
   name: string;
+  /** Host names reported by connectors associated with this machine. */
+  reportedNames?: string[];
   ip?: string;
   publicIp?: string;
   notes?: string;
@@ -43,9 +45,9 @@ export interface Agent extends AvatarProfile {
   id: string;
   name: string;
   kind: AgentKind;
-  /** Host label reported by a coding connector when available. */
+  /** Latest reported name of the runtime machine, when available. */
   host?: string | null;
-  /** Explicit owner binding; independent of connector-reported host labels. */
+  /** Runtime machine identity; a manually chosen binding takes priority over reports. */
   machineId?: string | null;
   /** Owner click-to-read preference, separate from connector speech grants. */
   replySpeech?: { enabled: boolean; version: number };
