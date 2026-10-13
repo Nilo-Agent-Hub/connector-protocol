@@ -32,7 +32,7 @@ def executable_check(executable: Path, manifest: dict, timeout: float) -> bool:
 
     def session_response():
         expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=90)
-        return {"protocol": {"major": 1, "minor": 0}, "agentId": agent_id, "instanceId": instance_id,
+        return {"protocol": manifest["protocol"], "agentId": agent_id, "instanceId": instance_id,
                 "connector": manifest, "heartbeatIntervalSeconds": 30,
                 "leaseExpiresAt": expires.isoformat().replace("+00:00", "Z")}
 

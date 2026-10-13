@@ -21,6 +21,9 @@ private. This does not grant rights to third-party software or APIs.
 - [Developer guide](DEVELOPING.md): implementation and packaging walkthrough.
 - [Python SDK](python/ncp.py): standard-library-only client and durable reference
   runner; [echo example](examples/echo.py) and [manifest](examples/echo.manifest.json).
+  The bootstrap reader validates the independent management credential when
+  `runtime.manage` is approved; the client supplies it to handshake and generic
+  runtime, coding and native management routes, without exposing it in repr/logs.
 - [Python native-session helper](python/ncp_session.py): the NCP 1.1 handshake,
   instance fencing, heartbeat and local multi-process lease used by official
   Python Connectors. It is stdlib-only and is copied into each distribution by

@@ -12,6 +12,24 @@ to its upstream agent. A channel is a stable Hub conversation ID. Native upstrea
 session IDs are opaque identities in the optional native/coding extensions;
 vendor implementation details remain inside each Connector.
 
+### Agent families and access channels
+
+An Agent family (for example Codex) is presentation and legacy compatibility
+metadata. Its Desktop application and CLI/app-server are separate access channels,
+with separate Connector IDs, approved manifests, credentials, native session
+sources and lifecycle. Sharing a vendor, model, host machine or transport library
+does not authorize merging these identities or inferring one channel's abilities
+from another. `Agent.kind` is not an access-channel identifier. In this document,
+the wire term text "channel" specifically means a Hub conversation; an access
+channel is identified by its Connector manifest ID.
+
+New channels, including Desktop integrations, use `kind:"custom"` and an independent
+manifest. An already approved identity cannot change its channel by changing the
+native catalog provider or runtime report. Switching channels requires a separate
+pairing. Clients must use the manifest grants and current runtime/native reports
+for capability decisions, and display the Connector's name where channel choice
+matters. Legacy clients may keep their historical family fields and aliases.
+
 ## Declaration and approval
 
 The complete declaration is described by [manifest.schema.json](manifest.schema.json):

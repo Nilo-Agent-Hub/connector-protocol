@@ -50,6 +50,7 @@ class Bootstrap:
     connector_id: str
     manifest: dict
     state_dir: Path
+    management_token: str | None = None
 
     def __repr__(self) -> str:
         return "Bootstrap(<private>)"
@@ -76,7 +77,14 @@ class Bootstrap:
             state_dir = Path(value["stateDir"])
             if not state_dir.is_absolute():
                 raise ValueError()
-            return cls(hub_url, token, instance_id, agent_id, manifest["id"], manifest, state_dir)
+            management = value.get("managementToken")
+            if "runtime.manage" in manifest.get("capabilities", []):
+                if (not isinstance(management, str) or not management or len(management) > 4096
+                        or any(c.isspace() for c in management) or management == token):
+                    raise ValueError()
+            elif management is not None:
+                raise ValueError()
+            return cls(hub_url, token, instance_id, agent_id, manifest["id"], manifest, state_dir, management)
         except (KeyError, TypeError, ValueError, AttributeError):
             raise ProtocolError("invalid_bootstrap") from None
 
@@ -124,6 +132,12 @@ class Client:
         headers = {"Authorization": "Bearer " + self.bootstrap.token,
                    "X-Nilo-Connector-Instance": self.bootstrap.instance_id,
                    "Accept": "application/json", "Content-Type": "application/json"}
+        management = path.split("?", 1)[0] == "/api/connector/handshake" or path.startswith((
+            "/api/connector/runtime/", "/api/connector/coding/", "/api/connector/native/"))
+        if management and "runtime.manage" in self.bootstrap.manifest.get("capabilities", []):
+            if not self.bootstrap.management_token:
+                raise ProtocolError("management_credential_required")
+            headers["X-Agent-Inbox-Management-Token"] = self.bootstrap.management_token
         for attempt in range(self.attempts):
             request = urllib.request.Request(self.bootstrap.hub_url + path, data=data, headers=headers, method=method)
             try:
