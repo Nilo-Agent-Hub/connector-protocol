@@ -243,6 +243,62 @@ The owner submits a normal runtime request with `kind:"update-settings"` and
 `allowed` sets, and successful completion must report `source:"runtime"` and
 the requested actual values. Arbitrary opaque configuration cannot pass through.
 
+#### Initial selection and future conversation defaults
+
+A Connector with approved `coding.sessions` and `runtime.manage` may report
+`capabilities.sessionSelection:true` in its instance report. This promises to
+consume `conversation.runtimeSelection` when opening a new native session:
+
+```json
+{"runtimeSelection":{"model":{"model":"example-model","provider":"local"},"effort":"high","settings":{"mode":"safe"}}}
+```
+
+All three selection fields are optional. `model` contains both a model and a
+provider string (1–256 UTF-8 bytes each), matching the reported `models` entry;
+`switchModel` must be true. `effort` requires `model`, `reasoning:true`, and a
+choice in that model's `reasoningEfforts`. Nonempty `settings` requires
+`updateSettings:true` and the same key, scalar and `allowed` restrictions as
+generic settings above. JSON null in a setting is an explicit allowed value,
+never a deletion marker. Unknown fields are rejected. The public
+`typescript/contracts/runtime-selection.ts` helper validates these rules.
+
+The owner API `GET /api/agents/{id}/runtime/selection-defaults` returns
+`{selection:RuntimeSelection|null,revision:number}`. `PUT` accepts
+`{selection:RuntimeSelection|null,expectedRevision:number}`; both require
+configure permission. A changed value increments the revision. A stale revision
+conflicts, except resubmitting the already-stored value succeeds without another
+increment, so a lost response can be reconciled safely. Reading and clearing
+Hub-owned defaults remain available after a Connector goes offline or loses its
+capabilities. Saving non-null defaults requires a current, online instance report
+and supported choices; maintenance blocks the write. Other sessions may be busy.
+
+Owner conversation creation may include `runtimeSelection` and requires
+configure permission when doing so. A user with chat permission may inherit
+previously approved defaults. Hub merges defaults and the explicit selection in
+the creation transaction: explicit model/effort override defaults, settings merge
+by key, and changing model or provider drops inherited effort unless overridden.
+The merged snapshot is persisted and included in ordinary and queued deliveries.
+Retrying the same creation key returns that snapshot even if defaults or runtime
+capabilities subsequently change; changing the explicit selection is a conflict.
+Saved defaults that have become unsupported block new creation until corrected
+or cleared; Hub must not silently discard them. Branded initial-selection fields
+cannot be combined with `runtimeSelection`; explicit legacy requests continue
+through their compatibility path.
+
+These defaults affect future conversations only. They do not change native
+global defaults or existing sessions. Unselected fields use the Connector's
+native defaults. Before starting upstream work, the Connector must validate the
+frozen selection against its current choices and reject unavailable values,
+without silently substituting another model or setting. It applies the snapshot
+once when creating a session; later deliveries and resumptions preserve that
+session's current settings. Current observed values still come from runtime
+reports. The report capability is optional and does not add a manifest grant.
+
+Deployment order matters: earlier Hubs reject unknown runtime report fields.
+Upgrade Hub and apply its selection-storage migration before deploying a
+Connector that advertises `sessionSelection`; omitting the flag preserves the
+older protocol behavior.
+
 `runtimeUpdate` is the provider-independent runtime update report. All fields are
 required: `supported` (boolean), `reason` (null or `disabled`,
 `unsupported-platform`, `unavailable`), `status` (`idle`, `updating`, `restarting`,
@@ -254,6 +310,31 @@ idle runtime, no live sessions/actions and explicit update support. Success is
 accepted only with a matching operation ID, actual running version and consistent
 from/to versions. An uncertain update must be inspected; it is not automatically
 replayed. This updates the upstream runtime, not the pinned Connector package.
+
+Unclaimed runtime updates expire after one minute; claimed updates have a
+15-minute deadline and become `uncertain` on timeout. An uncertain update blocks
+new input, session creation, side conversations and configuration writes until
+inspection reports the same operation ID with verified success/unchanged version
+evidence, or an explicit failed outcome with an error. An idle report or a result
+for another operation cannot clear that block. Inspection and result reporting
+remain available; the original uncertain request is retained and never replayed.
+Update completion may use a new registered native `runtimeInstanceId` after
+restart. Ordinary configuration results must match the original current epoch.
+Result-only file/skill reads need no extra report, but still require that epoch
+to remain current. Retired epoch reports cannot indicate current online status.
+
+The owner runtime view exposes optional `runtimeUpdateRequest` with the latest
+durable `id`, `clientRequestId`, `status` and `error`. Clients recover a lost
+submission response only by matching `clientRequestId`, never from presence or
+a version change alone. The optional view-level `maintenance` boolean includes
+instance-wide maintenance and unresolved updates, including in conversation
+views whose last report still says idle. Old clients may ignore these additional
+response fields; Hub enforces the same restrictions transactionally.
+
+Successful model switches must report the selected model and provider, plus the
+requested reasoning effort when supplied, for every NCP implementation. A
+generic report does not need branded settings fields. Configuration writes
+require explicit `busy:false`; an unknown execution state is not idle.
 
 Compatibility aliases `/api/connector/codex/*`, old branded report/settings
 fields, and legacy signed Connector update operations remain available for

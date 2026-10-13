@@ -23,7 +23,7 @@ jobs:
       - run: go test ./... && go vet ./...
       - run: python3 conformance.py
       - run: python3 -m unittest discover -s python/tests -v
-      - run: node --test typescript/test/session.test.mjs
+      - run: node --test typescript/test/*.test.mjs
       - run: |
           python3 build_echo.py --output ./dist/echo-connector
           python3 conformance.py --executable ./dist/echo-connector --manifest ./examples/echo.manifest.json

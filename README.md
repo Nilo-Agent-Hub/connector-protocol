@@ -28,6 +28,10 @@ private. This does not grant rights to third-party software or APIs.
   be edited independently.
 - [TypeScript session](typescript/session.mjs) and [wire contracts](typescript/contracts/protocol.ts):
   the same protocol session and public types used by the official Node.js Connectors.
+- [Runtime selection helper](typescript/contracts/runtime-selection.ts): validates
+  and merges generic initial model, reasoning and setting selections. Optional
+  `sessionSelection` support lets Hub freeze owner defaults into new conversations
+  without vendor-specific creation fields; see the wire specification for rollout.
 - [License](LICENSE).
 
 From this directory, with Python 3.10 or newer:

@@ -106,6 +106,14 @@ export function isCodexRuntimeVersion(value: unknown): value is string {
 
 export type RuntimeSettingValue = string | number | boolean | null;
 
+/** Frozen at conversation creation; applied only when opening its native session. */
+export interface RuntimeSelection {
+  model?: { model: string; provider: string };
+  effort?: string;
+  settings?: Record<string, RuntimeSettingValue>;
+}
+export interface RuntimeSelectionDefaults { selection: RuntimeSelection | null; revision: number }
+
 export interface RuntimeReport {
   claude?: { settings: ClaudeSettings; source: 'configuration' | 'runtime'; conversion: 'native' | 'chat_completions' | 'responses' };
   claudeUpdate?: CodexUpdateInfo;
@@ -121,7 +129,7 @@ export interface RuntimeReport {
   runtimeVersion: string | null;
   // Legacy wire keys remain compatible with installed hosts; see Link docs/connector-naming.md.
   bridgeVersion?: string | null;
-  capabilities: { createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean; initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean; asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw' };
+  capabilities: { sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean; initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean; asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw' };
   codex?: CodexSettingsReport;
   codexUpdate?: CodexUpdateInfo;
   bridgeUpdate?: ConnectorUpdateInfo;
@@ -165,6 +173,9 @@ export interface RuntimeRequest {
 }
 
 export interface RuntimeView {
+  selectionDefaults?: RuntimeSelectionDefaults;
+  /** Hub-admitted runtime maintenance, including unresolved update outcomes. */
+  maintenance?: boolean;
   bridgeUpdateAllowed?: boolean;
   enabled: boolean;
   online: boolean;
@@ -172,6 +183,7 @@ export interface RuntimeView {
   observedAt: string | null;
   report: RuntimeReport | null;
   codexDefaults?: CodexSelection;
+  runtimeUpdateRequest?: { id: string; clientRequestId: string; status: RuntimeRequestStatus; error?: string | null } | null;
   codexUpdateRequest?: { id: string; clientRequestId: string; status: RuntimeRequestStatus } | null;
   bridgeUpdateRequest?: { id: string; clientRequestId: string; status: RuntimeRequestStatus; error?: string | null } | null;
   sync: { desiredRevision: number; appliedRevision: number | null; error: string | null };

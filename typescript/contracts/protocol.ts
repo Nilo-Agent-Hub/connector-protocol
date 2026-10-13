@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { CodexSelection } from './codex-settings.js';
-import type { ClaudeSelection } from './runtime.js';
+import type { ClaudeSelection, RuntimeSelection } from './runtime.js';
 import type { StickerMessageContent } from './stickers.js';
 export const PROTOCOL_VERSION = 1;
 export type AgentKind = "hermes" | "openclaw" | "nanobot" | "codex" | "claude" | "qoder" | "pi" | "qwenwork" | "custom";
@@ -27,6 +27,16 @@ export interface AvatarProfile {
 }
 export type AvatarPatch = { avatarAttachmentId: string | null } | { avatarEmoji: string | null } | { avatarPreset: AvatarPreset | null };
 export interface AccountAvatarProfile extends AvatarProfile { avatarVersion: number | null }
+/** Owner-maintained machine directory; addresses are optional display metadata. */
+export interface RuntimeMachine {
+  id: string;
+  name: string;
+  ip?: string;
+  publicIp?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Agent extends AvatarProfile {
   /** Approved connector identity and capabilities; separate from the Agent brand. */
   connector?: import('./connector-protocol.js').ConnectorManifest;
@@ -35,6 +45,8 @@ export interface Agent extends AvatarProfile {
   kind: AgentKind;
   /** Host label reported by a coding connector when available. */
   host?: string | null;
+  /** Explicit owner binding; independent of connector-reported host labels. */
+  machineId?: string | null;
   /** Owner click-to-read preference, separate from connector speech grants. */
   replySpeech?: { enabled: boolean; version: number };
   online: boolean;
@@ -51,7 +63,9 @@ export interface Conversation {
   /** Host reported project metadata for coding conversations. */
   projectName?: string;
   projectPath?: string;
-  /** Initial Codex selection only; confirmed current settings come from runtime reports. */
+  /** Frozen initial selection; apply once when opening a new native session. */
+  runtimeSelection?: RuntimeSelection;
+  /** Legacy initial selection; confirmed current settings come from runtime reports. */
   codexSettings?: CodexSelection;
   claudeSettings?: ClaudeSelection;
   title: string;
@@ -184,6 +198,8 @@ export interface Delivery {
 }
 export interface Snapshot {
   agents: Agent[];
+  /** Optional for compatibility with gateways predating the machine directory. */
+  machines?: RuntimeMachine[];
   conversations: Conversation[];
   revision: number;
   webVersion?: string;
@@ -193,9 +209,10 @@ export interface SyncChanges {
   cursor: string;
   hasMore: boolean;
   agents: Agent[];
+  machines?: RuntimeMachine[];
   conversations: Conversation[];
   messages: Message[];
-  removed: { agents: string[]; conversations: string[]; messages: string[] };
+  removed: { agents: string[]; machines?: string[]; conversations: string[]; messages: string[] };
   invalidations: { agentIds: string[]; conversationIds: string[]; all: boolean };
   webVersion?: string;
 }
