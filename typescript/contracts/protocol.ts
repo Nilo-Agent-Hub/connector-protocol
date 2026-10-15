@@ -159,7 +159,8 @@ export interface MessageProcess {
 }
 export interface Message {
   processSummary?: { count: number; detailsExpired: true; expiredAt: string };
-  origin?: { provider: 'codex-desktop' | 'codex' | 'claude' | 'qoder-desktop' | 'qoder-cli' | 'pi'; itemId: string; historical: boolean } | null;
+  /** Native provider names belong to the connector; retain unfamiliar channels. */
+  origin?: { provider: string; itemId: string; historical: boolean } | null;
   id: string;
   /** Durable entity revision; creation sequence remains independent. */
   revision?: number;
