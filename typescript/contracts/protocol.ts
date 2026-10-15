@@ -60,7 +60,8 @@ export interface Conversation {
   nativeBindingId?: string | null;
   id: string;
   agentId: string | null;
-  engine?: 'pi';
+  /** Unknown engines remain readable; clients must refuse unsupported operations. */
+  engine?: 'pi' | 'gemini-web' | (string & {});
   projectId?: string;
   /** Host reported project metadata for coding conversations. */
   projectName?: string;
