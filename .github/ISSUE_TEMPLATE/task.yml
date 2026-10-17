@@ -1,0 +1,24 @@
+name: Maintenance task
+description: Track documentation, refactoring, verification, or release preparation.
+title: "[Task] "
+labels: [task, needs-triage]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task and scope
+      description: Describe the work, its purpose, and its deliverable boundaries using public information only.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: State verifiable completion conditions and the evidence required; separate release preparation from actual publication.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Related work and dependencies
+      description: Link public issues and identify any follow-up work.

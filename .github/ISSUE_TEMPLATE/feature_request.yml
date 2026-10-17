@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a protocol or SDK improvement with verifiable acceptance criteria.
+title: "[Feature] "
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Search existing issues first. Use only public examples and references; maintainers will confirm scope and priority.
+  - type: textarea
+    id: need
+    attributes:
+      label: Need and use case
+      description: Who needs this, in which scenario, and what is the current workaround?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach and scope
+      description: Include alternatives, compatibility implications, and exclusions where useful.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Describe observable completion conditions and the validation environment required.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Related work and dependencies
+      description: Link public issues or specifications and identify independently deliverable changes.

@@ -1,5 +1,7 @@
 # Nilo Connector Protocol developer kit
 
+[Report a bug or propose work](https://github.com/Nilo-Agent-Hub/connector-protocol/issues/new/choose) · [Contribution workflow and checks](CONTRIBUTING.md)
+
 An independently implementable channel protocol for connecting an Agent to Nilo
 Hub. Connector IDs are namespaced strings: adding a third-party implementation
 requires no Hub provider enum, official adapter, source upload, or private
