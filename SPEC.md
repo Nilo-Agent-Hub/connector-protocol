@@ -247,6 +247,117 @@ fields remain `conversationId`, `runtimeVersion`, `capabilities`, `model`,
 `ephemeral` or `inline`. These reports describe supported behavior; they cannot
 expand the manifest's approved access.
 
+#### Read-only repository changes
+
+A Connector may report optional `capabilities.reviewChanges:true` to offer a
+change list and individual diffs for a bound conversation. Omitted or false means
+unsupported. This is an additive NCP 1.1 runtime extension, not a new manifest
+permission: it requires both approved `runtime.manage` and `files.read`, the
+independent management credential, and the owner's existing file-read policy.
+The capability and a returned snapshot never authorize access by themselves.
+
+The owner submits the existing runtime request envelope with a non-null
+`conversationId`. Only these payloads are accepted:
+
+```json
+{"conversationId":"8847a81c-661c-4813-aa13-a9086b896ae6","kind":"list-changes","payload":{}}
+{"conversationId":"8847a81c-661c-4813-aa13-a9086b896ae6","kind":"read-diff","payload":{"snapshotId":"opaque-snapshot","fileId":"opaque-entry"}}
+```
+
+Review is scoped to the repository resolved from that conversation's actual
+working directory and current runtime epoch. An instance default or a path from
+the caller cannot substitute for that directory. Existing project boundaries,
+allowed roots, denied paths and sensitive-file restrictions apply to the list
+and every content read, including content read from Git objects. Listing must
+omit metadata that the file policy does not allow to be disclosed. Review must
+not stage, discard, commit, edit, or otherwise change repository state. Git
+external diff helpers and text converters must not execute as part of review.
+Symlink targets and submodule working trees must not be followed for content.
+
+A successful `list-changes` returns `result.changes`:
+
+```json
+{
+  "changes": {
+    "snapshotId": "opaque-snapshot",
+    "observedAt": "2026-01-01T12:00:00Z",
+    "branch": "main",
+    "entries": [
+      {"id":"opaque-entry","path":"src/example.ts","area":"unstaged","status":"modified","additions":2,"deletions":1}
+    ],
+    "truncated": false
+  }
+}
+```
+
+`observedAt` is RFC 3339. `branch` is a branch name or null when unavailable.
+There are at most 500 entries; `truncated:true` means eligible entries were
+omitted by that limit. Each entry has a unique `id` within the snapshot, a
+repository-relative `path`, optional `previousPath` for a rename, `area`
+(`staged`, `unstaged`, `untracked`), and `status` (`added`, `modified`, `deleted`,
+`renamed`, `conflicted`, `typechanged`). Optional `additions` and `deletions` are
+non-negative integers or null; omitted or null counts mean unknown, not zero.
+The same path may have separate staged and unstaged entries with different IDs.
+
+Paths are nonempty, at most 4096 UTF-8 bytes, and never absolute or allowed to
+escape the authorized repository. A path is display metadata, not a request
+argument. Snapshot and entry IDs are nonempty opaque strings of at most 128
+UTF-8 bytes; clients must not construct or interpret them as filesystem paths.
+The Connector resolves them to the original repository, entry and area. Their
+scope includes the authenticated Agent, conversation and runtime epoch; IDs from
+another scope must not be accepted.
+
+A successful `read-diff` returns `result.diff`:
+
+```json
+{
+  "diff": {
+    "snapshotId": "opaque-snapshot",
+    "fileId": "opaque-entry",
+    "path": "src/example.ts",
+    "kind": "text",
+    "patch": "diff --git a/src/example.ts b/src/example.ts\n--- a/src/example.ts\n+++ b/src/example.ts\n@@ -1 +1 @@\n-old\n+new\n",
+    "truncated": false
+  }
+}
+```
+
+`snapshotId`, `fileId`, `path` and optional `previousPath` must agree with the
+requested snapshot entry. `kind` is `text`, `binary`, `symlink`, `submodule`,
+`restricted`, `too_large`, or `conflicted`. `patch` is a UTF-8 unified diff of at
+most 256 KiB for `text`; for every other kind it is the empty string. A bounded
+partial text patch must set `truncated:true`. Implementations may instead return
+`too_large` with an empty patch and `truncated:true`. A `restricted` result must
+not expose protected content. Clients must render non-text kinds explicitly and
+must not display an empty patch as evidence of no changes.
+
+Staged diffs compare HEAD with the index, unstaged diffs compare the index with
+the working tree, and untracked diffs compare an empty file with the working
+tree. An unborn repository can use an empty HEAD baseline. Conflict entries are
+reported explicitly instead of presenting one side as an ordinary text change.
+Before and after a list or diff read, the Connector must verify the relevant
+repository state, file identity, conversation scope and current authorization.
+If those observations change during reading, or the snapshot has expired or no
+longer describes the requested entry, fail with `changes_changed` and discard
+the content. A client obtains a new list before retrying; it must never silently
+show a newly read diff under an older snapshot. Result admission also checks
+that the runtime epoch is still current, just as for other result-only reads.
+
+Defined failures include `changes_changed` (refresh the list), `not_repository`
+(the conversation's directory is not in a repository), `git_unavailable`
+(Git cannot be used), `review_unavailable` (the scoped review cannot be provided),
+and existing `unsupported` or authorization errors. Error messages must not
+contain protected paths, file contents, credentials, or raw subprocess output.
+
+Earlier Hubs may reject unknown report fields and request kinds. Upgrade Hub
+before a Connector advertises `reviewChanges` or clients send these requests.
+An implementation targeting an older Hub must omit the capability; clients hide
+review when it is absent and handle `unsupported` without trying a file-access
+bypass. Older clients can ignore the optional capability and result fields.
+The TypeScript contracts retain the general runtime envelope and provide
+`RuntimeListChangesRequest` and `RuntimeReadDiffRequest` for strict construction;
+receivers must still validate these requirements at the wire boundary.
+
 Generic settings reports have this shape:
 
 ```json
