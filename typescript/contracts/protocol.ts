@@ -51,6 +51,11 @@ export interface Agent extends AvatarProfile {
   machineId?: string | null;
   /** Owner click-to-read preference, separate from connector speech grants. */
   replySpeech?: { enabled: boolean; version: number };
+  /**
+   * NCP 1.2: effective runtime capabilities the Hub knows without a live report (its fallback for runtimes that
+   * predate the 1.2 declarations). Runtime views carry the report-merged set.
+   */
+  runtimeCapabilities?: Partial<import('./runtime.js').RuntimeCapabilities>;
   online: boolean;
   lastSeenAt: string | null;
   createdAt: string;
@@ -83,8 +88,8 @@ export interface Conversation {
   lastIncomingSeq?: number;
   /** Gateway presentation state after Hermes accepted a `/sethome` delivery. */
   isHomeChannel?: boolean;
-  /** Fresh native Codex turn on this topic; absent when idle or unconfirmed. */
-  codexActivity?: "running" | "waiting";
+  /** Fresh native coding turn on this topic; absent when idle or unconfirmed. */
+  codingActivity?: "running" | "waiting";
 }
 export interface Attachment {
   id: string;
@@ -184,7 +189,7 @@ export interface Message {
   eventType?: import('./agent-run.js').AgentEventType;
   agentStatus?: import('./agent-run.js').AgentRunStatus;
   tool?: { name: string; input?: string; output?: string };
-  codexApprovalId?: string;
+  approvalId?: string;
   questionRequestId?: string;
   question?: import('./questions.js').MessageQuestion;
   questionAnswer?: import('./questions.js').MessageQuestionAnswer;

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Nilo Connector Protocol 1.1, hub-http-v1 profile. Python 3.10+, stdlib only.
+"""Nilo Connector Protocol 1.2, hub-http-v1 profile. Python 3.10+, stdlib only.
 
 Credentials arrive through a private stdin pipe; never persist or print Bootstrap.
 DurableRunner is a small synchronous reference for short work (<60 seconds).
@@ -21,6 +21,60 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+
+VERSION = "1.2.0"
+SUPPORTED_PROTOCOLS = ({"major": 1, "minor": 0}, {"major": 1, "minor": 1}, {"major": 1, "minor": 2})
+RUNTIME_MODEL_SCOPES = ("draft", "conversation", "defaults")
+RUNTIME_NATIVE_SETTINGS = ("codex", "claude")
+RUNTIME_MAX_INPUT_LENGTH = 1_000_000
+RUNTIME_MAX_COMMANDS = 64
+_RUNTIME_COMMAND = re.compile(r"/[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+
+
+def _bounded_text(value) -> bool:
+    return isinstance(value, str) and 1 <= len(value) <= 200
+
+
+def validate_runtime_capabilities(capabilities: dict) -> None:
+    """Raise ValueError if the NCP 1.2 fields of RuntimeReport.capabilities are invalid."""
+    if not isinstance(capabilities, dict):
+        raise ValueError("capabilities")
+    if "maxInputLength" in capabilities:
+        n = capabilities["maxInputLength"]
+        if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= RUNTIME_MAX_INPUT_LENGTH:
+            raise ValueError("maxInputLength")
+    if "modelScopes" in capabilities:
+        scopes = capabilities["modelScopes"]
+        if (not isinstance(scopes, list) or len(set(map(str, scopes))) != len(scopes)
+                or any(scope not in RUNTIME_MODEL_SCOPES for scope in scopes)):
+            raise ValueError("modelScopes")
+    if "nativeSettings" in capabilities and capabilities["nativeSettings"] not in RUNTIME_NATIVE_SETTINGS:
+        raise ValueError("nativeSettings")
+    if "boundSessionSettings" in capabilities and not isinstance(capabilities["boundSessionSettings"], bool):
+        raise ValueError("boundSessionSettings")
+    if "commands" in capabilities:
+        commands = capabilities["commands"]
+        if not isinstance(commands, list) or len(commands) > RUNTIME_MAX_COMMANDS:
+            raise ValueError("commands")
+        seen = set()
+        for item in commands:
+            if (not isinstance(item, dict) or not set(item) <= {"command", "description", "usage", "newTopic"}
+                    or not isinstance(item.get("command"), str) or not _RUNTIME_COMMAND.fullmatch(item["command"])
+                    or item["command"].lower() in seen or not _bounded_text(item.get("description"))
+                    or ("usage" in item and not _bounded_text(item["usage"]))
+                    or ("newTopic" in item and not isinstance(item["newTopic"], bool))):
+                raise ValueError("commands")
+            seen.add(item["command"].lower())
+
+
+def starts_new_topic(commands, text: str) -> bool:
+    """True when text's first word is a declared newTopic command, optionally followed by @name."""
+    words = text.split()
+    if not words:
+        return False
+    head = words[0].lower().split("@", 1)[0]
+    return any(item.get("newTopic") is True and item.get("command", "").lower() == head for item in commands or [])
 
 
 class ProtocolError(RuntimeError):
@@ -175,7 +229,7 @@ class Client:
         declared = self.bootstrap.manifest.get("protocol", {})
         if (not isinstance(value, dict) or value.get("instanceId") != self.bootstrap.instance_id
                 or value.get("agentId") != self.bootstrap.agent_id
-                or protocol not in ({"major": 1, "minor": 0}, {"major": 1, "minor": 1})
+                or protocol not in SUPPORTED_PROTOCOLS
                 or protocol != declared):
             raise ProtocolError("handshake_mismatch")
         self.ready = True

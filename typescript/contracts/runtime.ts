@@ -77,7 +77,7 @@ export interface ProjectListing {
   truncated: boolean;
 }
 
-export interface CodexUpdateInfo {
+export interface RuntimeUpdateInfo {
   supported: boolean;
   reason: 'disabled' | 'unsupported-platform' | 'unavailable' | null;
   status: 'idle' | 'updating' | 'restarting' | 'verifying' | 'succeeded' | 'unchanged' | 'failed' | 'uncertain';
@@ -114,24 +114,85 @@ export interface RuntimeSelection {
 }
 export interface RuntimeSelectionDefaults { selection: RuntimeSelection | null; revision: number }
 
+/** NCP 1.2: scopes in which the owner may choose a model (see SPEC "Runtime capability declarations"). */
+export type RuntimeModelScope = 'draft' | 'conversation' | 'defaults';
+/** NCP 1.2: the native settings contract a runtime speaks; absent means only generic `settings`. */
+export type RuntimeNativeSettings = 'codex' | 'claude';
+/** NCP 1.2: one text command the runtime understands. `newTopic` commands open a fresh Hub topic. */
+export interface RuntimeCommand { command: string; description: string; usage?: string; newTopic?: boolean }
+export const runtimeModelScopes: readonly RuntimeModelScope[] = ['draft', 'conversation', 'defaults'];
+export const RUNTIME_MAX_INPUT_LENGTH = 1_000_000;
+export const RUNTIME_MAX_COMMANDS = 64;
+
+export interface RuntimeCapabilities {
+  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean;
+  reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean;
+  initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean;
+  asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw';
+  /** NCP 1.2: largest accepted user input text length in UTF-16 code units (1..1000000). */
+  maxInputLength?: number;
+  /** NCP 1.2: where switch-model / selection is accepted; unique entries. */
+  modelScopes?: RuntimeModelScope[];
+  /** NCP 1.2: native settings contract id. */
+  nativeSettings?: RuntimeNativeSettings;
+  /** NCP 1.2: text command table, at most 64 unique commands. */
+  commands?: RuntimeCommand[];
+  /** NCP 1.2: settings stay editable for a conversation bound to an imported native session. */
+  boundSessionSettings?: boolean;
+}
+
+/** Returns a reason string when `value` violates the NCP 1.2 runtime capability rules, else null. */
+export function runtimeCapabilityExtensionsError(value: Record<string, unknown>): string | null {
+  if ('maxInputLength' in value) {
+    const n = value.maxInputLength;
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > RUNTIME_MAX_INPUT_LENGTH) return 'maxInputLength';
+  }
+  if ('modelScopes' in value) {
+    const scopes = value.modelScopes;
+    if (!Array.isArray(scopes) || scopes.length > runtimeModelScopes.length || new Set(scopes).size !== scopes.length || scopes.some(scope => !(runtimeModelScopes as readonly unknown[]).includes(scope))) return 'modelScopes';
+  }
+  if ('nativeSettings' in value && value.nativeSettings !== 'codex' && value.nativeSettings !== 'claude') return 'nativeSettings';
+  if ('boundSessionSettings' in value && typeof value.boundSessionSettings !== 'boolean') return 'boundSessionSettings';
+  if ('commands' in value) {
+    const commands = value.commands;
+    if (!Array.isArray(commands) || commands.length > RUNTIME_MAX_COMMANDS) return 'commands';
+    const seen = new Set<string>();
+    for (const item of commands) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return 'commands';
+      const { command, description, usage, newTopic, ...rest } = item as Record<string, unknown>;
+      if (Object.keys(rest).length || typeof command !== 'string' || !/^\/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(command) || seen.has(command.toLowerCase())) return 'commands';
+      if (typeof description !== 'string' || [...description].length < 1 || [...description].length > 200) return 'commands';
+      if (usage !== undefined && (typeof usage !== 'string' || [...usage].length < 1 || [...usage].length > 200)) return 'commands';
+      if (newTopic !== undefined && typeof newTopic !== 'boolean') return 'commands';
+      seen.add(command.toLowerCase());
+    }
+  }
+  return null;
+}
+
+/** True when `text` invokes a declared `newTopic` command: the command, optionally `@name`, then whitespace or end. */
+export function startsNewTopicCommand(commands: readonly RuntimeCommand[] | undefined, text: string): boolean {
+  const head = (text.trim().split(/\s/, 1)[0] ?? '').replace(/@[A-Za-z0-9_]+$/, '').toLowerCase();
+  return (commands ?? []).some(item => item.newTopic === true && item.command.toLowerCase() === head);
+}
+
 export interface RuntimeReport {
   claude?: { settings: ClaudeSettings; source: 'configuration' | 'runtime'; conversion: 'native' | 'chat_completions' | 'responses' };
-  claudeUpdate?: CodexUpdateInfo;
-  codexInstanceId?: string;
+  claudeUpdate?: RuntimeUpdateInfo;
   qoderInstanceId?: string;
   piInstanceId?: string;
   claudeInstanceId?: string;
   runtimeInstanceId?: string;
   settings?: { values: Record<string, RuntimeSettingValue>; allowed: Record<string, RuntimeSettingValue[]>; source: 'runtime' | 'defaults' };
-  runtimeUpdate?: CodexUpdateInfo;
+  runtimeUpdate?: RuntimeUpdateInfo;
   maintenance?: boolean;
   conversationId: string | null;
   runtimeVersion: string | null;
   // Legacy wire keys remain compatible with installed hosts; see Link docs/connector-naming.md.
   bridgeVersion?: string | null;
-  capabilities: { sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean; initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean; asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw' };
+  capabilities: RuntimeCapabilities;
   codex?: CodexSettingsReport;
-  codexUpdate?: CodexUpdateInfo;
+  codexUpdate?: RuntimeUpdateInfo;
   bridgeUpdate?: ConnectorUpdateInfo;
   bridgeUpdateCapability?: { platform: ConnectorPlatform; safeRetry: boolean };
   reasoning?: { effort: string | null };
@@ -182,6 +243,12 @@ export interface RuntimeView {
   lastSeenAt: string | null;
   observedAt: string | null;
   report: RuntimeReport | null;
+  /**
+   * NCP 1.2: effective runtime capabilities served by the Hub. Reported values win; the Hub fills
+   * fields an older runtime does not report from its server-side legacy profile. Present without a report.
+   */
+  capabilities?: RuntimeCapabilities;
+  /** Codex-contract projection of `selectionDefaults` (read-only; the Hub stores one copy). */
   codexDefaults?: CodexSelection;
   runtimeUpdateRequest?: { id: string; clientRequestId: string; status: RuntimeRequestStatus; error?: string | null } | null;
   codexUpdateRequest?: { id: string; clientRequestId: string; status: RuntimeRequestStatus } | null;

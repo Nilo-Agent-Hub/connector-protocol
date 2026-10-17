@@ -24,7 +24,7 @@ private. This does not grant rights to third-party software or APIs.
   The bootstrap reader validates the independent management credential when
   `runtime.manage` is approved; the client supplies it to handshake and generic
   runtime, coding and native management routes, without exposing it in repr/logs.
-- [Python native-session helper](python/ncp_session.py): the NCP 1.1 handshake,
+- [Python native-session helper](python/ncp_session.py): the NCP 1.1/1.2 handshake,
   instance fencing, heartbeat and local multi-process lease used by official
   Python Connectors. It is stdlib-only and is copied into each distribution by
   the Link synchronization check; copies carry the source notice and must not
@@ -56,7 +56,7 @@ not a publisher signature, security audit or certification. The enclosing Hub
 also includes a separate integration test against its real HTTP router and
 PostgreSQL; that server test is not needed to use this exported kit.
 
-The implemented version is NCP **1.1 / hub-http-v1**. It provides text channel receive/send, explicit ACKs, durable message IDs, instance leases, optional streaming, conversation creation, profile editing, bounded metadata and attachments. Capability-gated extensions cover runtime management, coding sessions/actions/approvals, native session catalogs, local file transfer, media, questions and stickers. A manifest requesting unsupported capabilities is rejected. Official paths remain compatibility aliases while Hub authorization is capability based.
+The implemented version is NCP **1.2 / hub-http-v1**. NCP 1.2 adds optional runtime capability declarations (input limit, model scopes, native settings contract, command table) on top of 1.1. It provides text channel receive/send, explicit ACKs, durable message IDs, instance leases, optional streaming, conversation creation, profile editing, bounded metadata and attachments. Capability-gated extensions cover runtime management, coding sessions/actions/approvals, native session catalogs, local file transfer, media, questions and stickers. A manifest requesting unsupported capabilities is rejected. Official paths remain compatibility aliases while Hub authorization is capability based.
 
 Link currently treats imported code as **trusted local execution**, with explicit
 user approval and independently verified manifest/executable SHA-256 digests.
