@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible protocol, SDK, example, or conformance problem.
+title: "[Bug] "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Search existing issues first. This repository is public; remove credentials, cookies, private addresses, and personal data from all evidence.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and impact
+      description: What is affected, and when did the problem start?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal example and prerequisites; state frequency if reproduction is intermittent.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include sanitized errors or logs and distinguish observations from hypotheses.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and versions
+      description: Include protocol/SDK version or commit, OS/architecture, language runtime, and whether evidence is local, CI, device, or production.
+    validations:
+      required: true
