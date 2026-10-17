@@ -266,6 +266,11 @@ accepting results and returning saved results. A changed policy invalidates old
 review data; clients must request a fresh list. Permission revocation also applies
 to already-completed results. Review results use the existing bounded runtime
 result retention rather than creating a permanent copy of repository content.
+For repository review, the `text` group includes explicitly allowed source-code
+extensions and build files such as `Dockerfile` and `Makefile`. This does not
+expand ordinary attachment-preview formats. Implementations must agree on their
+review allowlist and keep directory, byte-size and sensitive-file restrictions;
+an unfamiliar extension must not become readable merely because Git tracks it.
 
 The owner submits the existing runtime request envelope with a non-null
 `conversationId`. Only these payloads are accepted:
