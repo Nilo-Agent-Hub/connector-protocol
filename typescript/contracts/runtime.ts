@@ -2,6 +2,7 @@
 import type { CodexOptions, CodexSelection, CodexSettingsReport } from './codex-settings.js';
 import type { ConnectorUpdatePlan } from './connector-update.js';
 import type { ConnectorPlatform } from './connector-release.js';
+import type { FilePolicy } from './file-references.js';
 import type { ModelCapabilities, ModelCapabilityOverride } from './model-capabilities.js';
 import type { ModelProvider, ProviderSite } from './provider-connections.js';
 export type ModelApiMode = 'chat_completions' | 'responses' | 'anthropic_messages';
@@ -191,6 +192,8 @@ export interface RuntimeReport {
 export type RuntimeRequestKind = 'input-skills' | 'inspect' | 'switch-model' | 'read-file' | 'list-changes' | 'read-diff' | 'browse-projects' | 'register-project' | 'update-settings' | 'update-claude-settings' | 'set-skill' | 'set-mcp' | 'reload-mcp' | 'update-runtime' | 'update-codex' | 'update-claude' | 'update-bridge';
 export type RuntimeRequestStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'uncertain';
 export interface RuntimeRequest {
+  /** Server-owned file policy for review requests; never accepted from callers. */
+  filePolicy?: FilePolicy;
   bridgeRelease?: ConnectorUpdatePlan;
   id: string;
   agentId: string;
@@ -206,12 +209,14 @@ export interface RuntimeRequest {
 
 /** Review requests always require a bound conversation, never instance scope. */
 export type RuntimeListChangesRequest = Omit<RuntimeRequest, 'kind' | 'conversationId' | 'payload' | 'result'> & {
+  filePolicy: FilePolicy;
   kind: 'list-changes';
   conversationId: string;
   payload: Record<string, never>;
   result: { changes: RuntimeChanges } | null;
 };
 export type RuntimeReadDiffRequest = Omit<RuntimeRequest, 'kind' | 'conversationId' | 'payload' | 'result'> & {
+  filePolicy: FilePolicy;
   kind: 'read-diff';
   conversationId: string;
   payload: { snapshotId: string; fileId: string };

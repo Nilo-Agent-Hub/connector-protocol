@@ -256,6 +256,17 @@ permission: it requires both approved `runtime.manage` and `files.read`, the
 independent management credential, and the owner's existing file-read policy.
 The capability and a returned snapshot never authorize access by themselves.
 
+On delivery to the Connector, the server includes a top-level `filePolicy` with
+`enabled`, `directories`, `groups` and `maxBytes`, using the existing file-policy
+contract. This field is server-owned and cannot be supplied in an owner request
+or its payload. The Connector must apply it together with its local restrictions
+and must reject review when the policy is missing or disabled. The server binds
+the policy to the admitted request and rechecks it when delivering requests,
+accepting results and returning saved results. A changed policy invalidates old
+review data; clients must request a fresh list. Permission revocation also applies
+to already-completed results. Review results use the existing bounded runtime
+result retention rather than creating a permanent copy of repository content.
+
 The owner submits the existing runtime request envelope with a non-null
 `conversationId`. Only these payloads are accepted:
 
