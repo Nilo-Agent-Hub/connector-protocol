@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Package connectorprotocol defines the independently implementable NCP v1 contract.
+// Package connectorprotocol defines the independently implementable NCP v1 contract (1.2).
 package connectorprotocol
 
 import (
@@ -14,8 +14,8 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "1.1.0"
-const ProtocolMinor = 1
+const Version = "1.2.0"
+const ProtocolMinor = 2
 
 const InstanceHeader = "X-Nilo-Connector-Instance"
 const LeaseSeconds = 90

@@ -1,4 +1,4 @@
-"""NCP 1.1 sessions for native channels and standalone Connector transports.
+"""NCP 1.1/1.2 sessions for native channels and standalone Connector transports.
 
 SPDX-License-Identifier: MIT
 MIT License
@@ -66,8 +66,8 @@ class GatewayError(Exception):
 def manifest_from(path):
     with open(path, encoding="utf-8") as stream:
         value = json.load(stream)
-    if value.get("schemaVersion") != 1 or value.get("protocol") != {"major": 1, "minor": 1}:
-        raise ValueError("NCP 1.1 manifest required")
+    if value.get("schemaVersion") != 1 or value.get("protocol") not in ({"major": 1, "minor": 1}, {"major": 1, "minor": 2}):
+        raise ValueError("NCP 1.1 or 1.2 manifest required")
     if not {"channel.receive", "channel.send"}.issubset(value.get("capabilities", [])):
         raise ValueError("NCP channel capabilities required")
     return value
@@ -237,7 +237,7 @@ class Session:
 
     def _accepted(self, path, result):
         if path.endswith("handshake"):
-            if (not isinstance(result, dict) or result.get("protocol") != {"major": 1, "minor": 1}
+            if (not isinstance(result, dict) or result.get("protocol") != self.manifest.get("protocol")
                     or result.get("instanceId") != self.instance_id or result.get("connector") != self.manifest):
                 raise GatewayError(502, "connector_handshake_invalid")
             interval = result.get("heartbeatIntervalSeconds", 30)

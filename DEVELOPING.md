@@ -8,7 +8,7 @@ reference with no dependency on official Agent connectors.
 
 Copy `examples/echo.manifest.json`, choose an ID in a namespace you control (for
 example `com.example.my-agent`), and set your display name and release version.
-Validate against `manifest.schema.json`. NCP 1.1 accepts protocol minor 0 or 1. Every manifest requires `channel.receive` and
+Validate against `manifest.schema.json`. NCP 1.2 accepts protocol minor 0, 1 or 2; declare minor 2 before reporting the 1.2 runtime capability fields. Every manifest requires `channel.receive` and
 `channel.send`; minor 1 extensions must be explicitly listed; add only optional capabilities that your implementation uses.
 An ID alone does not prove ownership or publisher trust. Hub stores the exact
 manifest approved by the owner; changing it requires a new approval.

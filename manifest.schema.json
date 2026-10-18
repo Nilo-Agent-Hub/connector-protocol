@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Nilo Connector Protocol declaration (1.0 / 1.1)",
+  "title": "Nilo Connector Protocol declaration (1.0 / 1.1 / 1.2)",
   "description": "Hub approval declaration, not a package installer manifest or an attestation of trust. The name must additionally have no leading/trailing Unicode whitespace; the server enforces that rule.",
   "type": "object",
   "additionalProperties": false,
@@ -46,7 +46,8 @@
         "minor": {
           "enum": [
             0,
-            1
+            1,
+            2
           ]
         }
       }

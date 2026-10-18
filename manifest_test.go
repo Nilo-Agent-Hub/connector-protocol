@@ -14,7 +14,7 @@ func TestManifestValidationAndApprovalIdentity(t *testing.T) {
 		"unknown permission":        func(m *Manifest) { m.Capabilities = append(m.Capabilities, "shell.exec") },
 		"duplicate permission":      func(m *Manifest) { m.Capabilities = append(m.Capabilities, "channel.send") },
 		"missing receive":           func(m *Manifest) { m.Capabilities = []string{"channel.send", "channel.stream"} },
-		"future protocol":           func(m *Manifest) { m.Protocol.Minor = 2 },
+		"future protocol":           func(m *Manifest) { m.Protocol.Minor = 3 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := valid

@@ -1,0 +1,29 @@
+{
+  "report": {
+    "capabilities": {"sessionSelection": true, "switchModel": true, "reasoning": true, "updateSettings": true},
+    "models": [
+      {"model": "model-a", "provider": "one", "reasoningEfforts": [{"id": "high"}]},
+      {"model": "model-a", "provider": "two", "reasoningEfforts": []}
+    ],
+    "settings": {"allowed": {"mode": ["safe", "fast"], "nullable": [null, true], "limit": [1, 2], "enabled": [true, false]}}
+  },
+  "valid": [
+    {},
+    {"model": {"model": "model-a", "provider": "one"}, "effort": "high", "settings": {"nullable": null}},
+    {"model": {"model": "model-a", "provider": "two"}},
+    {"settings": {}},
+    {"settings": {"limit": 1.0, "enabled": true, "mode": "safe"}}
+  ],
+  "invalid": [
+    null, [], {"extra": true}, {"effort": "high"},
+    {"model": null}, {"model": {"model": "model-a"}},
+    {"model": {"model": "model-a", "provider": "missing"}},
+    {"model": {"model": "model-a", "provider": "one", "extra": "x"}},
+    {"model": {"model": "model-a", "provider": "two"}, "effort": "high"},
+    {"model": {"model": "model-a", "provider": "one"}, "effort": "unknown"},
+    {"settings": null}, {"settings": []}, {"settings": {"missing": null}},
+    {"settings": {"nullable": false}}, {"settings": {"nullable": 1}},
+    {"settings": {"limit": true}}, {"settings": {"enabled": 1}},
+    {"settings": {"mode": "unsafe"}}, {"settings": {"mode": {}}}
+  ]
+}
