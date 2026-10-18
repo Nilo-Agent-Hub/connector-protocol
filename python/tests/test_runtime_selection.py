@@ -38,7 +38,7 @@ class RuntimeSelectionTests(unittest.TestCase):
             validate_runtime_selection(model, report)
 
     def test_json_limits_and_nonfinite_numbers_are_rejected(self):
-        for value in (float("nan"), float("inf"), -float("inf"), "a" * 1025):
+        for value in (float("nan"), float("inf"), -float("inf"), 10**1000, "a" * 1025):
             report = dict(self.report, settings={"allowed": {"test": [value]}})
             with self.assertRaises(ValueError):
                 validate_runtime_selection({"settings": {"test": value}}, report)

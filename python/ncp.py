@@ -92,8 +92,12 @@ def validate_runtime_selection(selection: dict, report: dict) -> None:
         return isinstance(value, str) and 0 < len(value.encode("utf-8")) <= limit
 
     def scalar(value):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            try:
+                return math.isfinite(value)
+            except OverflowError:
+                return False
         return (value is None or isinstance(value, bool)
-                or isinstance(value, (int, float)) and math.isfinite(value)
                 or isinstance(value, str) and len(value.encode("utf-8")) <= 1024)
 
     def same(left, right):
