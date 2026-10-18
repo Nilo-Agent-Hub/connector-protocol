@@ -1,0 +1,25 @@
+{
+  "description": "NCP 1.2 RuntimeReport.capabilities declarations shared by the Go, Python and TypeScript tests.",
+  "valid": [
+    {},
+    {"inspect": true, "maxInputLength": 32000, "modelScopes": ["conversation", "defaults"], "nativeSettings": "codex", "boundSessionSettings": true,
+     "commands": [{"command": "/new", "description": "New topic", "newTopic": true}, {"command": "/model", "description": "Switch model", "usage": "/model name"}]},
+    {"maxInputLength": 1, "modelScopes": [], "nativeSettings": "claude", "commands": []},
+    {"maxInputLength": 1000000, "modelScopes": ["draft", "conversation", "defaults"]}
+  ],
+  "invalid": [
+    {"maxInputLength": 0}, {"maxInputLength": 1000001}, {"maxInputLength": 1.5}, {"maxInputLength": "10"}, {"maxInputLength": true},
+    {"modelScopes": ["conversation", "conversation"]}, {"modelScopes": ["global"]}, {"modelScopes": "draft"},
+    {"nativeSettings": "qoder"}, {"nativeSettings": null}, {"boundSessionSettings": 1},
+    {"commands": {}}, {"commands": [{"command": "new", "description": "x"}]}, {"commands": [{"command": "/new", "description": ""}]},
+    {"commands": [{"command": "/new", "description": "x"}, {"command": "/NEW", "description": "y"}]},
+    {"commands": [{"command": "/new", "description": "x", "extra": true}]},
+    {"commands": [{"command": "/new", "description": "x", "newTopic": "yes"}]},
+    {"commands": [{"command": "/new", "description": "x", "usage": ""}]},
+    {"commands": [{"description": "x"}]}
+  ],
+  "newTopic": {
+    "commands": [{"command": "/new", "description": "New topic", "newTopic": true}, {"command": "/stop", "description": "Stop"}],
+    "cases": [["/new", true], [" /NEW ", true], ["/new topic name", true], ["/new@nilo_bot", true], ["/newer", false], ["/stop", false], ["", false], ["hello /new", false]]
+  }
+}

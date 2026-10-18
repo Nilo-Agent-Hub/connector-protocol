@@ -1,6 +1,6 @@
-# Nilo Connector Protocol 1.1 — hub-http-v1
+# Nilo Connector Protocol 1.2 — hub-http-v1
 
-This document describes the implemented NCP 1.1 profile with text channels and capability-gated extensions. An
+This document describes the implemented NCP 1.2 profile with text channels and capability-gated extensions. An
 independent executable can connect without importing Hub or Link internals or
 being added to a vendor allowlist. The declaration, examples and Python reference
 client in this directory are MIT licensed; implementations may remain proprietary.
@@ -50,7 +50,9 @@ internal hyphens. IDs are self-declared names, not proof of domain ownership or
 publisher identity. Names have 1–80 Unicode code points, no control characters,
 and no leading/trailing whitespace. Versions use three numeric components and
 an optional prerelease suffix; build metadata is not accepted in this version.
-Protocol major 1 and minor 0 or 1 are accepted. Minor 1 enables the extension capabilities listed below. Unknown declaration fields,
+Protocol major 1 and minor 0, 1 or 2 are accepted. Minor 1 enables the extension capabilities listed below. Minor 2 adds no
+capabilities; it announces that the Connector may send the NCP 1.2 runtime capability declarations, so a 1.1 Hub rejects
+the declaration at pairing instead of rejecting later runtime reports. Unknown declaration fields,
 unknown capabilities, and duplicate capabilities are rejected.
 
 Both `channel.receive` and `channel.send` are required. These optional permissions
@@ -247,6 +249,29 @@ fields remain `conversationId`, `runtimeVersion`, `capabilities`, `model`,
 `ephemeral` or `inline`. These reports describe supported behavior; they cannot
 expand the manifest's approved access.
 
+#### Runtime capability declarations (NCP 1.2)
+
+A runtime describes behavior the Hub and its clients must not infer from an
+adapter kind. All fields are optional members of `capabilities`:
+
+| Field | Shape | Meaning |
+|---|---|---|
+| `maxInputLength` | integer 1–1000000 | Largest user input text the runtime accepts, in UTF-16 code units. Clients size the composer from it. |
+| `modelScopes` | unique subset of `draft`, `conversation`, `defaults` | Where an owner may choose a model. `conversation`: `switch-model` with a `conversationId`. `defaults`: future conversations (a `switch-model` without `conversationId`, or Hub-stored selection defaults). `draft`: a new topic's initial selection. The Hub refuses `switch-model` outside the declared scopes. |
+| `nativeSettings` | `codex` or `claude` | The native settings contract the runtime speaks (native editors, native update and confirmation rules). Absent means generic `settings` only. |
+| `commands` | at most 64 `{command,description,usage?,newTopic?}` | Text commands the runtime understands. `command` matches `^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` and is unique case-insensitively; `description` and `usage` have 1–200 code points. Input whose first word is a `newTopic:true` command, optionally followed by `@name`, opens a new Hub topic instead of being delivered to the current one. |
+| `boundSessionSettings` | boolean | Settings remain editable for a conversation bound to an imported native session. |
+
+Connectors must declare protocol minor 2 before reporting these fields. A
+Connector whose manifest declares minor 2 is the sole authority for them: an
+absent field means the runtime does not support it (no `modelScopes` means no
+model choice, no `nativeSettings` means generic settings only). The Hub serves
+the effective capabilities on runtime views as `capabilities` (and merged into
+`report.capabilities`): a reported value always wins, and only for Connectors
+that predate NCP 1.2 may the Hub supply unreported fields from its own fallback
+profile. `codexDefaults` on a runtime view is a
+read-only projection of `selectionDefaults`; the Hub stores one copy.
+
 Generic settings reports have this shape:
 
 ```json
@@ -264,8 +289,10 @@ the requested actual values. Arbitrary opaque configuration cannot pass through.
 #### Initial selection and future conversation defaults
 
 A Connector with approved `coding.sessions` and `runtime.manage` may report
-`capabilities.sessionSelection:true` in its instance report. This promises to
-consume `conversation.runtimeSelection` when opening a new native session:
+`capabilities.sessionSelection:true` in its instance report. NCP 1.2 messaging
+Connectors with `channel.receive` and `runtime.manage` may also opt into this
+contract without requesting coding capabilities. This promises to consume
+`conversation.runtimeSelection` before the first native input of a new session:
 
 ```json
 {"runtimeSelection":{"model":{"model":"example-model","provider":"local"},"effort":"high","settings":{"mode":"safe"}}}
@@ -278,7 +305,21 @@ choice in that model's `reasoningEfforts`. Nonempty `settings` requires
 `updateSettings:true` and the same key, scalar and `allowed` restrictions as
 generic settings above. JSON null in a setting is an explicit allowed value,
 never a deletion marker. Unknown fields are rejected. The public
-`typescript/contracts/runtime-selection.ts` helper validates these rules.
+`typescript/contracts/runtime-selection.ts` and Python
+`ncp.validate_runtime_selection(selection, report)` helpers validate these rules.
+These helpers do not apply selections or manage durable state. In NCP 1.2, Hub
+also requires `modelScopes` to include `draft` for an explicit initial model or
+`defaults` for a saved/inherited model default. Pure settings selections do not
+require a model scope. These write scopes do not hide reported model facts.
+
+A non-coding NCP 1.2 Connector uses its current handshake `instanceId` as
+`report.runtimeInstanceId`; no coding registration is needed or permitted
+without its grant. Hub binds the report and ordinary runtime action results to
+that same current, unexpired NCP lease. A report from a retired instance cannot
+authorize creation, update defaults, or confirm a model change. Model selection
+also requires an instance report observed within the current presence window.
+Coding Connectors retain their separately registered native epoch and NCP 1.1
+Connectors retain the existing coding-only initial-selection contract.
 
 The owner API `GET /api/agents/{id}/runtime/selection-defaults` returns
 `{selection:RuntimeSelection|null,revision:number}`. `PUT` accepts
@@ -312,10 +353,32 @@ once when creating a session; later deliveries and resumptions preserve that
 session's current settings. Current observed values still come from runtime
 reports. The report capability is optional and does not add a manifest grant.
 
+For a messaging runtime, the Connector must serialize selection application and
+first-input dispatch for each conversation. It durably records the frozen
+snapshot (or a canonical digest), validates the current catalog, and persists
+the requested native session settings before dispatching any input. A successful
+command response alone is insufficient if the host cannot confirm durable actual
+values. Record an applied state only after that confirmation. Record consumption
+with the durable input-dispatch transition before entering upstream work.
+
+Redelivery of the same snapshot resumes that state machine; a different snapshot
+for the same conversation is a conflict. Once consumed, the snapshot must never
+reset later owner changes or resumed-session settings. An older session without
+an application record must not be treated as a new session merely because this
+Connector version has just started. After a crash during application, reconcile
+the persisted native settings without dispatching input; if the outcome cannot
+be established, fail closed and retain an uncertain outcome. Never retry an
+unknown native action, substitute a default model, or start a new model turn to
+resolve that uncertainty. Existing delivery ACK/error/uncertain semantics still
+apply and do not imply exactly-once upstream execution.
+
 Deployment order matters: earlier Hubs reject unknown runtime report fields.
 Upgrade Hub and apply its selection-storage migration before deploying a
 Connector that advertises `sessionSelection`; omitting the flag preserves the
-older protocol behavior.
+older protocol behavior. A messaging implementation must wait for a Hub that
+supports the NCP 1.2 lease-based selection path before opting in. This is an
+additive use of existing fields; an older Hub may reject it and must not be
+worked around by requesting unrelated coding grants.
 
 `runtimeUpdate` is the provider-independent runtime update report. All fields are
 required: `supported` (boolean), `reason` (null or `disabled`,
@@ -354,10 +417,13 @@ requested reasoning effort when supplied, for every NCP implementation. A
 generic report does not need branded settings fields. Configuration writes
 require explicit `busy:false`; an unknown execution state is not idle.
 
-Compatibility aliases `/api/connector/codex/*`, old branded report/settings
-fields, and legacy signed Connector update operations remain available for
-installed clients. They use the same capability boundary once an identity
-handshakes. New implementations use the generic routes and fields above.
+Coding routes live only under `/api/connector/coding/*`; there is no
+`/api/connector/codex/*` alias. Generic coding wire names carry no vendor
+prefix: messages use `approvalId`, conversations use `codingActivity`, and
+reports use `runtimeInstanceId`. Codex's own native contract (`codexSettings`,
+`codexDefaults`, `codex`, `codexUpdate`, `update-codex`) and legacy signed
+Connector update operations use the same capability boundary once an identity
+handshakes.
 
 An existing legacy credential can make a one-way NCP handshake binding. It may
 only narrow its existing profile; requesting `runtime.manage` also proves the

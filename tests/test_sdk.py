@@ -18,6 +18,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 from ncp import Bootstrap, Client, DurableRunner, Journal, ProtocolError, SafeToRetry, TransportError
+from ncp import SUPPORTED_PROTOCOLS, VERSION, starts_new_topic, validate_runtime_capabilities
 
 MANIFEST = json.loads((Path(__file__).resolve().parents[1] / "examples" / "echo.manifest.json").read_text())
 
@@ -359,6 +360,28 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("invalid_bootstrap", result.stderr)
             self.assertNotIn("never-log-me", result.stdout + result.stderr)
+
+
+class RuntimeCapabilityTests(unittest.TestCase):
+    vectors = json.loads((Path(__file__).resolve().parent / "vectors" / "runtime-capabilities.json").read_text(encoding="utf-8"))
+
+    def test_version_and_protocols(self):
+        self.assertEqual(VERSION, "1.2.0")
+        self.assertIn({"major": 1, "minor": 2}, SUPPORTED_PROTOCOLS)
+
+    def test_shared_vectors(self):
+        for value in self.vectors["valid"]:
+            with self.subTest(value=value):
+                validate_runtime_capabilities(value)
+        for value in self.vectors["invalid"]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_runtime_capabilities(value)
+
+    def test_new_topic_commands(self):
+        commands = self.vectors["newTopic"]["commands"]
+        for text, expected in self.vectors["newTopic"]["cases"]:
+            with self.subTest(text=text):
+                self.assertEqual(starts_new_topic(commands, text), expected)
 
 
 if __name__ == "__main__":

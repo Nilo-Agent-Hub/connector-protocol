@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Nilo Connector Protocol 1.1, hub-http-v1 profile. Python 3.10+, stdlib only.
+"""Nilo Connector Protocol 1.2, hub-http-v1 profile. Python 3.10+, stdlib only.
 
 Credentials arrive through a private stdin pipe; never persist or print Bootstrap.
 DurableRunner is a small synchronous reference for short work (<60 seconds).
@@ -10,6 +10,7 @@ import dataclasses
 import hashlib
 import ipaddress
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,114 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+
+VERSION = "1.2.0"
+SUPPORTED_PROTOCOLS = ({"major": 1, "minor": 0}, {"major": 1, "minor": 1}, {"major": 1, "minor": 2})
+RUNTIME_MODEL_SCOPES = ("draft", "conversation", "defaults")
+RUNTIME_NATIVE_SETTINGS = ("codex", "claude")
+RUNTIME_MAX_INPUT_LENGTH = 1_000_000
+RUNTIME_MAX_COMMANDS = 64
+_RUNTIME_COMMAND = re.compile(r"/[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+
+
+def _bounded_text(value) -> bool:
+    return isinstance(value, str) and 1 <= len(value) <= 200
+
+
+def validate_runtime_capabilities(capabilities: dict) -> None:
+    """Raise ValueError if the NCP 1.2 fields of RuntimeReport.capabilities are invalid."""
+    if not isinstance(capabilities, dict):
+        raise ValueError("capabilities")
+    if "maxInputLength" in capabilities:
+        n = capabilities["maxInputLength"]
+        if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= RUNTIME_MAX_INPUT_LENGTH:
+            raise ValueError("maxInputLength")
+    if "modelScopes" in capabilities:
+        scopes = capabilities["modelScopes"]
+        if (not isinstance(scopes, list) or len(set(map(str, scopes))) != len(scopes)
+                or any(scope not in RUNTIME_MODEL_SCOPES for scope in scopes)):
+            raise ValueError("modelScopes")
+    if "nativeSettings" in capabilities and capabilities["nativeSettings"] not in RUNTIME_NATIVE_SETTINGS:
+        raise ValueError("nativeSettings")
+    if "boundSessionSettings" in capabilities and not isinstance(capabilities["boundSessionSettings"], bool):
+        raise ValueError("boundSessionSettings")
+    if "commands" in capabilities:
+        commands = capabilities["commands"]
+        if not isinstance(commands, list) or len(commands) > RUNTIME_MAX_COMMANDS:
+            raise ValueError("commands")
+        seen = set()
+        for item in commands:
+            if (not isinstance(item, dict) or not set(item) <= {"command", "description", "usage", "newTopic"}
+                    or not isinstance(item.get("command"), str) or not _RUNTIME_COMMAND.fullmatch(item["command"])
+                    or item["command"].lower() in seen or not _bounded_text(item.get("description"))
+                    or ("usage" in item and not _bounded_text(item["usage"]))
+                    or ("newTopic" in item and not isinstance(item["newTopic"], bool))):
+                raise ValueError("commands")
+            seen.add(item["command"].lower())
+
+
+def starts_new_topic(commands, text: str) -> bool:
+    """True when text's first word is a declared newTopic command, optionally followed by @name."""
+    words = text.split()
+    if not words:
+        return False
+    head = words[0].lower().split("@", 1)[0]
+    return any(item.get("newTopic") is True and item.get("command", "").lower() == head for item in commands or [])
+
+
+def validate_runtime_selection(selection: dict, report: dict) -> None:
+    """Validate a frozen selection against current choices before native work.
+
+    This is validation only: the Connector still owns durable apply-once state,
+    ordering and recovery. Model scope authorization occurs when Hub freezes the
+    explicit draft or inherited defaults, whose provenance is not in this value.
+    """
+    def invalid():
+        raise ValueError("Session selection is invalid or no longer supported")
+
+    def text(value, limit=256):
+        return isinstance(value, str) and 0 < len(value.encode("utf-8")) <= limit
+
+    def scalar(value):
+        return (value is None or isinstance(value, bool)
+                or isinstance(value, (int, float)) and math.isfinite(value)
+                or isinstance(value, str) and len(value.encode("utf-8")) <= 1024)
+
+    def same(left, right):
+        # JSON booleans are not numbers, unlike Python's True == 1.
+        if isinstance(left, bool) != isinstance(right, bool):
+            return False
+        return left == right
+
+    caps = report.get("capabilities", {})
+    if (caps.get("sessionSelection") is not True or not isinstance(selection, dict)
+            or not set(selection) <= {"model", "effort", "settings"}):
+        invalid()
+    if "model" in selection:
+        model = selection["model"]
+        if (not isinstance(model, dict) or set(model) != {"model", "provider"}
+                or not text(model.get("model")) or not text(model.get("provider"))):
+            invalid()
+        choice = next((item for item in report.get("models", [])
+                       if item.get("model") == model["model"] and item.get("provider") == model["provider"]), None)
+        if caps.get("switchModel") is not True or choice is None:
+            invalid()
+        if "effort" in selection and (not text(selection["effort"]) or caps.get("reasoning") is not True
+                or not any(item.get("id") == selection["effort"] for item in choice.get("reasoningEfforts", []))):
+            invalid()
+    elif "effort" in selection:
+        invalid()
+    if "settings" in selection:
+        settings = selection["settings"]
+        if (not isinstance(settings, dict) or len(settings) > 64
+                or settings and caps.get("updateSettings") is not True):
+            invalid()
+        allowed = (report.get("settings") or {}).get("allowed", {})
+        for key, value in settings.items():
+            if (not isinstance(key, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", key)
+                    or not scalar(value) or not any(same(option, value) for option in allowed.get(key, []))):
+                invalid()
 
 
 class ProtocolError(RuntimeError):
@@ -175,7 +284,7 @@ class Client:
         declared = self.bootstrap.manifest.get("protocol", {})
         if (not isinstance(value, dict) or value.get("instanceId") != self.bootstrap.instance_id
                 or value.get("agentId") != self.bootstrap.agent_id
-                or protocol not in ({"major": 1, "minor": 0}, {"major": 1, "minor": 1})
+                or protocol not in SUPPORTED_PROTOCOLS
                 or protocol != declared):
             raise ProtocolError("handshake_mismatch")
         self.ready = True

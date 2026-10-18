@@ -26,17 +26,20 @@ private. This does not grant rights to third-party software or APIs.
   The bootstrap reader validates the independent management credential when
   `runtime.manage` is approved; the client supplies it to handshake and generic
   runtime, coding and native management routes, without exposing it in repr/logs.
-- [Python native-session helper](python/ncp_session.py): the NCP 1.1 handshake,
+- [Python native-session helper](python/ncp_session.py): the NCP 1.1/1.2 handshake,
   instance fencing, heartbeat and local multi-process lease used by official
   Python Connectors. It is stdlib-only and is copied into each distribution by
   the Link synchronization check; copies carry the source notice and must not
   be edited independently.
 - [TypeScript session](typescript/session.mjs) and [wire contracts](typescript/contracts/protocol.ts):
   the same protocol session and public types used by the official Node.js Connectors.
-- [Runtime selection helper](typescript/contracts/runtime-selection.ts): validates
+- [Runtime selection helper](typescript/contracts/runtime-selection.ts) and
+  Python `ncp.validate_runtime_selection`: validate
   and merges generic initial model, reasoning and setting selections. Optional
   `sessionSelection` support lets Hub freeze owner defaults into new conversations
-  without vendor-specific creation fields; see the wire specification for rollout.
+  without vendor-specific creation fields. NCP 1.2 messaging Connectors may opt
+  in with their ordinary channel/runtime grants and current NCP lease; see the
+  wire specification for apply-once recovery and rollout requirements.
 - [License](LICENSE).
 
 From this directory, with Python 3.10 or newer:
@@ -58,7 +61,7 @@ not a publisher signature, security audit or certification. The enclosing Hub
 also includes a separate integration test against its real HTTP router and
 PostgreSQL; that server test is not needed to use this exported kit.
 
-The implemented version is NCP **1.1 / hub-http-v1**. It provides text channel receive/send, explicit ACKs, durable message IDs, instance leases, optional streaming, conversation creation, profile editing, bounded metadata and attachments. Capability-gated extensions cover runtime management, coding sessions/actions/approvals, native session catalogs, local file transfer, media, questions and stickers. A manifest requesting unsupported capabilities is rejected. Official paths remain compatibility aliases while Hub authorization is capability based.
+The implemented version is NCP **1.2 / hub-http-v1**. NCP 1.2 adds optional runtime capability declarations (input limit, model scopes, native settings contract, command table) on top of 1.1. It provides text channel receive/send, explicit ACKs, durable message IDs, instance leases, optional streaming, conversation creation, profile editing, bounded metadata and attachments. Capability-gated extensions cover runtime management, coding sessions/actions/approvals, native session catalogs, local file transfer, media, questions and stickers. A manifest requesting unsupported capabilities is rejected. Official paths remain compatibility aliases while Hub authorization is capability based.
 
 Link currently treats imported code as **trusted local execution**, with explicit
 user approval and independently verified manifest/executable SHA-256 digests.
