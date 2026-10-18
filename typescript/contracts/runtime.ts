@@ -87,6 +87,8 @@ export interface RuntimeUpdateInfo {
   error: string | null;
   updatedAt: string;
 }
+/** @deprecated Runtime updates are generic; use RuntimeUpdateInfo. */
+export type CodexUpdateInfo = RuntimeUpdateInfo;
 
 export type ConnectorUpdateStatus = 'idle' | 'staging' | 'restarting' | 'verifying' | 'succeeded' | 'failed' | 'uncertain';
 export type ConnectorUpdateError = 'update_bridge_failed' | 'update_bridge_timeout' | 'update_bridge_reconnect_failed' | 'update_bridge_unavailable' | 'update_bridge_interrupted' | 'update_bridge_manifest_invalid';
