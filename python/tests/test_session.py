@@ -270,7 +270,19 @@ class GatewayTests(unittest.TestCase):
                                                                "/api/connector/heartbeat", "/api/connector/messages/example"])
         for _, headers, _ in self.calls:
             self.assertEqual({key.lower(): value for key, value in headers.items()}[INSTANCE_HEADER.lower()], self.gateway.instance_id)
-            self.assertNotIn("x-agent-inbox-management-token", {key.lower() for key in headers})
+            self.assertNotIn("x-agent-hub-management-token", {key.lower() for key in headers})
+
+    def test_management_secret_is_scoped_and_retired_header_is_stripped(self):
+        self.gateway.headers["X-Agent-Hub-Management-Token"] = "management-only"
+        self.gateway.headers["X-Agent-Inbox-Management-Token"] = "retired-secret"
+        self.gateway.call("GET", "/api/connector/profile")
+        for path, headers, _ in self.calls:
+            values = {key.lower(): value for key, value in headers.items()}
+            self.assertNotIn("x-agent-inbox-management-token", values)
+            if path.endswith("/handshake"):
+                self.assertEqual(values.get("x-agent-hub-management-token"), "management-only")
+            else:
+                self.assertNotIn("x-agent-hub-management-token", values)
 
     def test_missing_protocol_endpoint_never_calls_business_route(self):
         self.rejected = True

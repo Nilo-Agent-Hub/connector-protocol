@@ -48,10 +48,11 @@ export class NcpSession {
     headers.set('Authorization', `Bearer ${this.options.token}`);
     headers.set(INSTANCE_HEADER, this.instanceId);
     // Callers cannot inject a management credential into the message channel.
-    headers.delete('X-Agent-Inbox-Management-Token');
+    headers.delete('X-Agent-Hub-Management-Token');
+    headers.delete('X-Agent-Inbox-Management-Token'); // Strip the retired header as well.
     if (management) {
       if (!this.options.managementToken) throw new NcpError(403, 'management_credential_required');
-      headers.set('X-Agent-Inbox-Management-Token', this.options.managementToken);
+      headers.set('X-Agent-Hub-Management-Token', this.options.managementToken);
     }
     return this.fetcher(new URL(path, this.base), { ...init, headers, redirect: 'error', signal: init.signal ?? AbortSignal.timeout(28_000) });
   }

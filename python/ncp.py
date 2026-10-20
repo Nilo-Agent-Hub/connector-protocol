@@ -137,7 +137,7 @@ class Client:
         if management and "runtime.manage" in self.bootstrap.manifest.get("capabilities", []):
             if not self.bootstrap.management_token:
                 raise ProtocolError("management_credential_required")
-            headers["X-Agent-Inbox-Management-Token"] = self.bootstrap.management_token
+            headers["X-Agent-Hub-Management-Token"] = self.bootstrap.management_token
         for attempt in range(self.attempts):
             request = urllib.request.Request(self.bootstrap.hub_url + path, data=data, headers=headers, method=method)
             try:

@@ -5,7 +5,7 @@ import type { StickerMessageContent } from './stickers.js';
 export const PROTOCOL_VERSION = 1;
 export type AgentKind = "hermes" | "openclaw" | "nanobot" | "codex" | "claude" | "qoder" | "pi" | "qwenwork" | "custom";
 export const isCodingAgent = (kind: AgentKind | undefined) => kind === 'codex' || kind === 'claude' || kind === 'qoder' || kind === 'pi';
-export const avatarPresets = ["inbox", "codex", "claude", "qoder", "hermes", "openclaw", "nanobot", "husky", "shiba", "wolf", "rabbit", "orca", "whale", "retro-robot", "mecha", "steampunk", "eve", "sparkles", "orbit", "leaf"] as const;
+export const avatarPresets = ["agent-hub", "inbox", "codex", "claude", "qoder", "hermes", "openclaw", "nanobot", "husky", "shiba", "wolf", "rabbit", "orca", "whale", "retro-robot", "mecha", "steampunk", "eve", "sparkles", "orbit", "leaf"] as const;
 export type BuiltinAvatarPreset = typeof avatarPresets[number];
 /** Preset IDs are server-owned; older clients must retain IDs added later. */
 export type AvatarPreset = BuiltinAvatarPreset | (string & {});
