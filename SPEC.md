@@ -90,7 +90,7 @@ put them in URLs, command-line arguments, or package manifests.
    `POST /api/pairing/exchange` with the same proof. Pending exchanges return 202.
    A successful exchange returns `status:"exchanged"`, `agent` including its
    `id`, `kind:"custom"` and `connector`, and
-   `credentials:{messageToken:"…"}`. If the declaration includes `runtime.manage`, the owner must have maintenance permission and exchange returns an independent `managementToken`; it is delivered through the private Link bootstrap and sent as `X-Agent-Inbox-Management-Token` on management calls. The message and management credentials are always checked independently.
+   `credentials:{messageToken:"…"}`. If the declaration includes `runtime.manage`, the owner must have maintenance permission and exchange returns an independent `managementToken`; it is delivered through the private Link bootstrap and sent as `X-Agent-Hub-Management-Token` on management calls. The message and management credentials are always checked independently.
 5. Persist the credential privately, then `POST /api/pairing/ack` with the same
    proof. Exchange recovery is available until `recoveryExpiresAt`; ACK ends
    credential delivery recovery. Expired/cancelled sessions return 410.
@@ -195,7 +195,7 @@ after reconnection. It is not silently queued for a future connector process.
 
 Each extension requires its immutable manifest capability. The management-related
 rows additionally require `runtime.manage` and the independent
-`X-Agent-Inbox-Management-Token`. A message token never grants management access.
+`X-Agent-Hub-Management-Token`. A message token never grants management access.
 Management access includes explicitly configured model connection credentials:
 request this capability only if the Connector needs to configure its runtime.
 
@@ -514,3 +514,16 @@ bootstrap, not environment inheritance or argv. Keep local state private, bind
 it to Hub origin plus agent and connector identity, and use an exclusive journal
 lock. Revoking the agent's message token stops future Hub access but cannot erase
 data an executable already read or stop an already-submitted upstream operation.
+
+## Brand migration (2026-10-15)
+
+The product name is **Nilo Agent Hub**; code identifiers use `agent-hub`,
+`agent_hub` and `AgentHub`. New clients send `X-Agent-Hub-Management-Token`.
+During rollout Hub also accepts the retired `X-Agent-Inbox-Management-Token`
+header, but rejects conflicting or duplicate credentials. Upgrade Hub before
+Connectors. SDK transports must strip both spellings from message-only calls.
+
+New message metadata uses `agent_hub_kind` and `agent_hub_label`; readers retain
+`agent_inbox_kind` and `agent_inbox_label` as fallbacks for stored messages.
+The signed v1 Connector release repository and signature domain remain immutable
+compatibility identities. They are not names for new products or packages.

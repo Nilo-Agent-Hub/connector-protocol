@@ -160,8 +160,8 @@ function normalizeStatus(value: unknown): AgentRunStatus | undefined {
 
 function compatibilityType(content: string, metadata: HermesEventInput): AgentEventType | undefined {
   const plain = content.trim();
-  const kind = stringValue(metadata.agent_inbox_kind)?.toLowerCase();
-  const label = stringValue(metadata.agent_inbox_label)?.toLowerCase();
+  const kind = stringValue(metadata.agent_hub_kind ?? metadata.agent_inbox_kind)?.toLowerCase();
+  const label = stringValue(metadata.agent_hub_label ?? metadata.agent_inbox_label)?.toLowerCase();
   if (kind === 'chat') return 'assistant_text';
   if (kind === 'system' || metadata._interim_send === true || metadata.non_conversational === true) return 'system_status';
   if (label?.includes('thinking') || label?.includes('思考') || /^💬\s*\S/u.test(plain)) return 'thinking';

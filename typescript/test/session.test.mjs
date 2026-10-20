@@ -26,16 +26,17 @@ test('concurrent message and control traffic share one handshake and preserve cr
     assert.equal(init.headers.get('X-Nilo-Connector-Instance'), session.instanceId);
     assert.equal(init.redirect, 'error');
   }
-  assert.equal(calls[0].init.headers.get('X-Agent-Inbox-Management-Token'), 'management-only');
-  assert.equal(calls[1].init.headers.get('X-Agent-Inbox-Management-Token'), null);
-  assert.equal(calls[2].init.headers.get('X-Agent-Inbox-Management-Token'), 'management-only');
+  assert.equal(calls[0].init.headers.get('X-Agent-Hub-Management-Token'), 'management-only');
+  assert.equal(calls[1].init.headers.get('X-Agent-Hub-Management-Token'), null);
+  assert.equal(calls[2].init.headers.get('X-Agent-Hub-Management-Token'), 'management-only');
 });
 
 test('caller supplied headers cannot override credentials or inject management access', async t => {
   const { session, calls } = fixture(); t.after(() => session.close());
-  await session.fetch('/api/connector/profile', { headers: { Authorization: 'wrong', 'X-Nilo-Connector-Instance': 'wrong', 'X-Agent-Inbox-Management-Token': 'wrong' } });
+  await session.fetch('/api/connector/profile', { headers: { Authorization: 'wrong', 'X-Nilo-Connector-Instance': 'wrong', 'X-Agent-Hub-Management-Token': 'wrong', 'X-Agent-Inbox-Management-Token': 'legacy-wrong' } });
   assert.equal(calls.at(-1).init.headers.get('Authorization'), 'Bearer agent-only');
   assert.equal(calls.at(-1).init.headers.get('X-Nilo-Connector-Instance'), session.instanceId);
+  assert.equal(calls.at(-1).init.headers.get('X-Agent-Hub-Management-Token'), null);
   assert.equal(calls.at(-1).init.headers.get('X-Agent-Inbox-Management-Token'), null);
 });
 
@@ -110,7 +111,7 @@ test('heartbeat uses the same process lease and message credential only', async 
   assert.equal(calls.length, 2);
   assert.equal(calls[1].url.pathname, '/api/connector/heartbeat');
   assert.equal(calls[1].init.headers.get('X-Nilo-Connector-Instance'), connected.instanceId);
-  assert.equal(calls[1].init.headers.get('X-Agent-Inbox-Management-Token'), null);
+  assert.equal(calls[1].init.headers.get('X-Agent-Hub-Management-Token'), null);
 });
 
 test('cancelling one waiter does not cancel another request sharing the handshake', async t => {
