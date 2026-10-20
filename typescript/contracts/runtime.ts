@@ -2,6 +2,7 @@
 import type { CodexOptions, CodexSelection, CodexSettingsReport } from './codex-settings.js';
 import type { ConnectorUpdatePlan } from './connector-update.js';
 import type { ConnectorPlatform } from './connector-release.js';
+import type { FilePolicy } from './file-references.js';
 import type { ModelCapabilities, ModelCapabilityOverride } from './model-capabilities.js';
 import type { ModelProvider, ProviderSite } from './provider-connections.js';
 export type ModelApiMode = 'chat_completions' | 'responses' | 'anthropic_messages';
@@ -77,6 +78,38 @@ export interface ProjectListing {
   truncated: boolean;
 }
 
+/** Read-only observations of the repository belonging to a conversation. */
+export interface RuntimeChangeEntry {
+  /** Opaque within this snapshot; never a caller-provided filesystem path. */
+  id: string;
+  /** Repository-relative paths, subject to the existing file-read policy. */
+  path: string;
+  previousPath?: string;
+  area: 'staged' | 'unstaged' | 'untracked';
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'conflicted' | 'typechanged';
+  /** Absent or null when a reliable count is unavailable. */
+  additions?: number | null;
+  deletions?: number | null;
+}
+export interface RuntimeChanges {
+  snapshotId: string;
+  observedAt: string;
+  /** Null for an unborn or detached HEAD when no branch name is available. */
+  branch: string | null;
+  entries: RuntimeChangeEntry[];
+  truncated: boolean;
+}
+export interface RuntimeDiff {
+  snapshotId: string;
+  fileId: string;
+  path: string;
+  previousPath?: string;
+  kind: 'text' | 'binary' | 'symlink' | 'submodule' | 'restricted' | 'too_large' | 'conflicted';
+  /** Unified diff for text; empty for all other kinds. Maximum 256 KiB UTF-8. */
+  patch: string;
+  truncated: boolean;
+}
+
 export interface RuntimeUpdateInfo {
   supported: boolean;
   reason: 'disabled' | 'unsupported-platform' | 'unavailable' | null;
@@ -128,7 +161,7 @@ export const RUNTIME_MAX_COMMANDS = 64;
 
 export interface RuntimeCapabilities {
   /** Consume frozen conversation.runtimeSelection before first native input; includes opt-in NCP 1.2 messaging Connectors. */
-  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean;
+  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reviewChanges?: boolean;
   reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean;
   initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean;
   asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw';
@@ -142,6 +175,8 @@ export interface RuntimeCapabilities {
   commands?: RuntimeCommand[];
   /** NCP 1.2: settings stay editable for a conversation bound to an imported native session. */
   boundSessionSettings?: boolean;
+  /** Keys durably saved for the next turn, including while running. Requires gateway opt-in. */
+  nextTurnSettings?: string[];
 }
 
 /** Returns a reason string when `value` violates the NCP 1.2 runtime capability rules, else null. */
@@ -156,6 +191,10 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
   }
   if ('nativeSettings' in value && value.nativeSettings !== 'codex' && value.nativeSettings !== 'claude') return 'nativeSettings';
   if ('boundSessionSettings' in value && typeof value.boundSessionSettings !== 'boolean') return 'boundSessionSettings';
+  if ('nextTurnSettings' in value) {
+    const keys = value.nextTurnSettings;
+    if (!Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))) return 'nextTurnSettings';
+  }
   if ('commands' in value) {
     const commands = value.commands;
     if (!Array.isArray(commands) || commands.length > RUNTIME_MAX_COMMANDS) return 'commands';
@@ -173,6 +212,11 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
   return null;
 }
 
+/** A nonempty patch may be deferred only when every key was explicitly advertised. */
+export function supportsNextTurnSettings(capabilities: Pick<RuntimeCapabilities, 'nextTurnSettings' | 'updateSettings'> | undefined, keys: readonly string[]): boolean {
+  return capabilities?.updateSettings === true && keys.length > 0 && keys.every(key => capabilities.nextTurnSettings?.includes(key));
+}
+
 /** True when `text` invokes a declared `newTopic` command: the command, optionally `@name`, then whitespace or end. */
 export function startsNewTopicCommand(commands: readonly RuntimeCommand[] | undefined, text: string): boolean {
   const head = (text.trim().split(/\s/, 1)[0] ?? '').replace(/@[A-Za-z0-9_]+$/, '').toLowerCase();
@@ -186,7 +230,7 @@ export interface RuntimeReport {
   piInstanceId?: string;
   claudeInstanceId?: string;
   runtimeInstanceId?: string;
-  settings?: { values: Record<string, RuntimeSettingValue>; allowed: Record<string, RuntimeSettingValue[]>; source: 'runtime' | 'defaults' };
+  settings?: { values: Record<string, RuntimeSettingValue>; allowed: Record<string, RuntimeSettingValue[]>; source: 'runtime' | 'defaults' | 'configuration' };
   runtimeUpdate?: RuntimeUpdateInfo;
   maintenance?: boolean;
   conversationId: string | null;
@@ -220,21 +264,40 @@ export interface RuntimeReport {
   files: { id: string; name: string; source: string; loaded: boolean | null }[];
 }
 
-export type RuntimeRequestKind = 'input-skills' | 'inspect' | 'switch-model' | 'read-file' | 'browse-projects' | 'register-project' | 'update-settings' | 'update-claude-settings' | 'set-skill' | 'set-mcp' | 'reload-mcp' | 'update-runtime' | 'update-codex' | 'update-claude' | 'update-bridge';
+export type RuntimeRequestKind = 'input-skills' | 'inspect' | 'switch-model' | 'read-file' | 'list-changes' | 'read-diff' | 'browse-projects' | 'register-project' | 'update-settings' | 'update-claude-settings' | 'set-skill' | 'set-mcp' | 'reload-mcp' | 'update-runtime' | 'update-codex' | 'update-claude' | 'update-bridge';
 export type RuntimeRequestStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'uncertain';
 export interface RuntimeRequest {
+  /** Server-owned file policy for review requests; never accepted from callers. */
+  filePolicy?: FilePolicy;
   bridgeRelease?: ConnectorUpdatePlan;
   id: string;
   agentId: string;
   conversationId: string | null;
   kind: RuntimeRequestKind;
-  payload: { projectId?: string; choiceId?: string; fileId?: string; effort?: string; directoryId?: string; name?: string; settings?: CodexOptions & Record<string, RuntimeSettingValue>; claudeSettings?: ClaudeSettings; targetId?: string; enabled?: boolean; targetVersion?: string };
+  payload: { projectId?: string; choiceId?: string; fileId?: string; snapshotId?: string; effort?: string; directoryId?: string; name?: string; settings?: CodexOptions & Record<string, RuntimeSettingValue>; claudeSettings?: ClaudeSettings; targetId?: string; enabled?: boolean; targetVersion?: string };
   status: RuntimeRequestStatus;
   error: string | null;
-  result: { skills?: NonNullable<RuntimeReport['skills']>; file?: { name: string; text: string; truncated: boolean; source: string }; listing?: ProjectListing; project?: { id: string; name: string; path: string } } | null;
+  result: { skills?: NonNullable<RuntimeReport['skills']>; file?: { name: string; text: string; truncated: boolean; source: string }; changes?: RuntimeChanges; diff?: RuntimeDiff; listing?: ProjectListing; project?: { id: string; name: string; path: string } } | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Review requests always require a bound conversation, never instance scope. */
+export type RuntimeListChangesRequest = Omit<RuntimeRequest, 'kind' | 'conversationId' | 'payload' | 'result'> & {
+  filePolicy: FilePolicy;
+  kind: 'list-changes';
+  conversationId: string;
+  payload: Record<string, never>;
+  result: { changes: RuntimeChanges } | null;
+};
+export type RuntimeReadDiffRequest = Omit<RuntimeRequest, 'kind' | 'conversationId' | 'payload' | 'result'> & {
+  filePolicy: FilePolicy;
+  kind: 'read-diff';
+  conversationId: string;
+  payload: { snapshotId: string; fileId: string };
+  result: { diff: RuntimeDiff } | null;
+};
+export type RuntimeReviewRequest = RuntimeListChangesRequest | RuntimeReadDiffRequest;
 
 export interface RuntimeView {
   selectionDefaults?: RuntimeSelectionDefaults;
@@ -271,6 +334,10 @@ export const runtimeErrorMessages: Record<string, string> = {
   busy: '这个话题仍在执行任务，请停止或等待完成后再切换。',
   unsupported: '当前运行时版本尚不支持这项操作。',
   unavailable: '运行时暂时无法提供这项信息。',
+  changes_changed: '工作区改动已变化，请刷新列表后重新查看。',
+  not_repository: '此话题的工作目录不属于 Git 仓库。',
+  git_unavailable: '此主机暂时无法使用 Git。',
+  review_unavailable: '当前话题暂时无法查看代码改动。',
   not_applied: '运行时未确认设置，请刷新实际状态或查看话题中的提示。',
   conflict: '远端配置已被其他方式修改，请先检查该连接。',
   invalid_config: '连接配置无法应用，请检查接口类型、地址和模型名称。',

@@ -90,7 +90,7 @@ put them in URLs, command-line arguments, or package manifests.
    `POST /api/pairing/exchange` with the same proof. Pending exchanges return 202.
    A successful exchange returns `status:"exchanged"`, `agent` including its
    `id`, `kind:"custom"` and `connector`, and
-   `credentials:{messageToken:"…"}`. If the declaration includes `runtime.manage`, the owner must have maintenance permission and exchange returns an independent `managementToken`; it is delivered through the private Link bootstrap and sent as `X-Agent-Inbox-Management-Token` on management calls. The message and management credentials are always checked independently.
+   `credentials:{messageToken:"…"}`. If the declaration includes `runtime.manage`, the owner must have maintenance permission and exchange returns an independent `managementToken`; it is delivered through the private Link bootstrap and sent as `X-Agent-Hub-Management-Token` on management calls. The message and management credentials are always checked independently.
 5. Persist the credential privately, then `POST /api/pairing/ack` with the same
    proof. Exchange recovery is available until `recoveryExpiresAt`; ACK ends
    credential delivery recovery. Expired/cancelled sessions return 410.
@@ -195,7 +195,7 @@ after reconnection. It is not silently queued for a future connector process.
 
 Each extension requires its immutable manifest capability. The management-related
 rows additionally require `runtime.manage` and the independent
-`X-Agent-Inbox-Management-Token`. A message token never grants management access.
+`X-Agent-Hub-Management-Token`. A message token never grants management access.
 Management access includes explicitly configured model connection credentials:
 request this capability only if the Connector needs to configure its runtime.
 
@@ -261,6 +261,7 @@ adapter kind. All fields are optional members of `capabilities`:
 | `nativeSettings` | `codex` or `claude` | The native settings contract the runtime speaks (native editors, native update and confirmation rules). Absent means generic `settings` only. |
 | `commands` | at most 64 `{command,description,usage?,newTopic?}` | Text commands the runtime understands. `command` matches `^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` and is unique case-insensitively; `description` and `usage` have 1–200 code points. Input whose first word is a `newTopic:true` command, optionally followed by `@name`, opens a new Hub topic instead of being delivered to the current one. |
 | `boundSessionSettings` | boolean | Settings remain editable for a conversation bound to an imported native session. |
+| `nextTurnSettings` | up to 64 unique setting keys | Explicit opt-in to saving these fields for the next turn, including while running or waiting. Requires the gateway opt-in below. |
 
 Connectors must declare protocol minor 2 before reporting these fields. A
 Connector whose manifest declares minor 2 is the sole authority for them: an
@@ -272,6 +273,133 @@ that predate NCP 1.2 may the Hub supply unreported fields from its own fallback
 profile. `codexDefaults` on a runtime view is a
 read-only projection of `selectionDefaults`; the Hub stores one copy.
 
+#### Read-only repository changes
+
+A Connector may report optional `capabilities.reviewChanges:true` to offer a
+change list and individual diffs for a bound conversation. Omitted or false means
+unsupported. This is an additive NCP 1.1 runtime extension, not a new manifest
+permission: it requires both approved `runtime.manage` and `files.read`, the
+independent management credential, and the owner's existing file-read policy.
+The capability and a returned snapshot never authorize access by themselves.
+
+On delivery to the Connector, the server includes a top-level `filePolicy` with
+`enabled`, `directories`, `groups` and `maxBytes`, using the existing file-policy
+contract. This field is server-owned and cannot be supplied in an owner request
+or its payload. The Connector must apply it together with its local restrictions
+and must reject review when the policy is missing or disabled. The server binds
+the policy to the admitted request and rechecks it when delivering requests,
+accepting results and returning saved results. A changed policy invalidates old
+review data; clients must request a fresh list. Permission revocation also applies
+to already-completed results. Review results use the existing bounded runtime
+result retention rather than creating a permanent copy of repository content.
+For repository review, the `text` group includes explicitly allowed source-code
+extensions and build files such as `Dockerfile` and `Makefile`. This does not
+expand ordinary attachment-preview formats. Implementations must agree on their
+review allowlist and keep directory, byte-size and sensitive-file restrictions;
+an unfamiliar extension must not become readable merely because Git tracks it.
+
+The owner submits the existing runtime request envelope with a non-null
+`conversationId`. Only these payloads are accepted:
+
+```json
+{"conversationId":"8847a81c-661c-4813-aa13-a9086b896ae6","kind":"list-changes","payload":{}}
+{"conversationId":"8847a81c-661c-4813-aa13-a9086b896ae6","kind":"read-diff","payload":{"snapshotId":"opaque-snapshot","fileId":"opaque-entry"}}
+```
+
+Review is scoped to the repository resolved from that conversation's actual
+working directory and current runtime epoch. An instance default or a path from
+the caller cannot substitute for that directory. Existing project boundaries,
+allowed roots, denied paths and sensitive-file restrictions apply to the list
+and every content read, including content read from Git objects. Listing must
+omit metadata that the file policy does not allow to be disclosed. Review must
+not stage, discard, commit, edit, or otherwise change repository state. Git
+external diff helpers and text converters must not execute as part of review.
+Symlink targets and submodule working trees must not be followed for content.
+
+A successful `list-changes` returns `result.changes`:
+
+```json
+{
+  "changes": {
+    "snapshotId": "opaque-snapshot",
+    "observedAt": "2026-01-01T12:00:00Z",
+    "branch": "main",
+    "entries": [
+      {"id":"opaque-entry","path":"src/example.ts","area":"unstaged","status":"modified","additions":2,"deletions":1}
+    ],
+    "truncated": false
+  }
+}
+```
+
+`observedAt` is RFC 3339. `branch` is a branch name or null when unavailable.
+There are at most 500 entries; `truncated:true` means eligible entries were
+omitted by that limit. Each entry has a unique `id` within the snapshot, a
+repository-relative `path`, optional `previousPath` for a rename, `area`
+(`staged`, `unstaged`, `untracked`), and `status` (`added`, `modified`, `deleted`,
+`renamed`, `conflicted`, `typechanged`). Optional `additions` and `deletions` are
+non-negative integers or null; omitted or null counts mean unknown, not zero.
+The same path may have separate staged and unstaged entries with different IDs.
+
+Paths are nonempty, at most 4096 UTF-8 bytes, and never absolute or allowed to
+escape the authorized repository. A path is display metadata, not a request
+argument. Snapshot and entry IDs are nonempty opaque strings of at most 128
+UTF-8 bytes; clients must not construct or interpret them as filesystem paths.
+The Connector resolves them to the original repository, entry and area. Their
+scope includes the authenticated Agent, conversation and runtime epoch; IDs from
+another scope must not be accepted.
+
+A successful `read-diff` returns `result.diff`:
+
+```json
+{
+  "diff": {
+    "snapshotId": "opaque-snapshot",
+    "fileId": "opaque-entry",
+    "path": "src/example.ts",
+    "kind": "text",
+    "patch": "diff --git a/src/example.ts b/src/example.ts\n--- a/src/example.ts\n+++ b/src/example.ts\n@@ -1 +1 @@\n-old\n+new\n",
+    "truncated": false
+  }
+}
+```
+
+`snapshotId`, `fileId`, `path` and optional `previousPath` must agree with the
+requested snapshot entry. `kind` is `text`, `binary`, `symlink`, `submodule`,
+`restricted`, `too_large`, or `conflicted`. `patch` is a UTF-8 unified diff of at
+most 256 KiB for `text`; for every other kind it is the empty string. A bounded
+partial text patch must set `truncated:true`. Implementations may instead return
+`too_large` with an empty patch and `truncated:true`. A `restricted` result must
+not expose protected content. Clients must render non-text kinds explicitly and
+must not display an empty patch as evidence of no changes.
+
+Staged diffs compare HEAD with the index, unstaged diffs compare the index with
+the working tree, and untracked diffs compare an empty file with the working
+tree. An unborn repository can use an empty HEAD baseline. Conflict entries are
+reported explicitly instead of presenting one side as an ordinary text change.
+Before and after a list or diff read, the Connector must verify the relevant
+repository state, file identity, conversation scope and current authorization.
+If those observations change during reading, or the snapshot has expired or no
+longer describes the requested entry, fail with `changes_changed` and discard
+the content. A client obtains a new list before retrying; it must never silently
+show a newly read diff under an older snapshot. Result admission also checks
+that the runtime epoch is still current, just as for other result-only reads.
+
+Defined failures include `changes_changed` (refresh the list), `not_repository`
+(the conversation's directory is not in a repository), `git_unavailable`
+(Git cannot be used), `review_unavailable` (the scoped review cannot be provided),
+and existing `unsupported` or authorization errors. Error messages must not
+contain protected paths, file contents, credentials, or raw subprocess output.
+
+Earlier Hubs may reject unknown report fields and request kinds. Upgrade Hub
+before a Connector advertises `reviewChanges` or clients send these requests.
+An implementation targeting an older Hub must omit the capability; clients hide
+review when it is absent and handle `unsupported` without trying a file-access
+bypass. Older clients can ignore the optional capability and result fields.
+The TypeScript contracts retain the general runtime envelope and provide
+`RuntimeListChangesRequest` and `RuntimeReadDiffRequest` for strict construction;
+receivers must still validate these requirements at the wire boundary.
+
 Generic settings reports have this shape:
 
 ```json
@@ -280,11 +408,14 @@ Generic settings reports have this shape:
 
 Setting keys match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$`, with at most 64 keys.
 Values are JSON null, booleans, finite numbers, or strings up to 1024 bytes.
-Each `allowed` list has 1–64 scalar choices. `source` is `runtime` or `defaults`.
+Each `allowed` list has 1–64 scalar choices. `source` is `runtime` or `defaults`;
+with the next-turn extension it may also be `configuration` for durably saved
+conversation settings, which are not claims about an active turn.
 The owner submits a normal runtime request with `kind:"update-settings"` and
 `payload:{settings:{mode:"fast"}}`. Hub admits only choices in the reported
 `allowed` sets, and successful completion must report `source:"runtime"` and
-the requested actual values. Arbitrary opaque configuration cannot pass through.
+the requested actual values, or a durable `configuration` receipt under the
+next-turn extension below. Arbitrary opaque configuration cannot pass through.
 
 #### Initial selection and future conversation defaults
 
@@ -514,3 +645,44 @@ bootstrap, not environment inheritance or argv. Keep local state private, bind
 it to Hub origin plus agent and connector identity, and use an exclusive journal
 lock. Revoking the agent's message token stops future Hub access but cannot erase
 data an executable already read or stop an already-submitted upstream operation.
+
+#### Next-turn settings extension
+
+This optional extension retains NCP 1.2 manifests and request shapes. A gateway
+opts in with `nextTurnSettings:true` in its `POST /connector/coding/connect`
+response. A Connector must omit `capabilities.nextTurnSettings` and the new
+`configuration` source in `settings` and `codex` until this opt-in is received
+on the current connection. Existing native Claude configuration reports retain
+their original source semantics.
+Older gateways therefore continue to receive their original reports. An absent
+or empty capability never permits busy writes; the gateway must not synthesize
+it from an Agent kind.
+
+`nextTurnSettings` uses the setting-key grammar above. A nonempty patch can be
+saved while running/waiting only when `updateSettings:true` and every patch key
+is declared, allowed, and authorized. Unknown execution state, maintenance and
+stale instances still block writes. This is not permission to change models or
+other management operations.
+
+Success means durable storage before acknowledgement. `settings.values` (and a
+native settings projection) reports the saved selection with source
+`configuration`; `environment` continues to describe actual execution. A later
+successful patch replaces the saved keys. Before starting the next turn, the
+Connector applies the saved selection; on failure it must not execute input
+under the previous permissions. A running turn, steered input, an outstanding
+approval or an already executing tool is unaffected. Saved configuration must
+survive reconnects and restarts; no automatic approval is implied. Clients may
+use the simple notice “Applies next turn”.
+
+## Brand migration (2026-10-15)
+
+The product name is **Nilo Agent Hub**; code identifiers use `agent-hub`,
+`agent_hub` and `AgentHub`. New clients send `X-Agent-Hub-Management-Token`.
+During rollout Hub also accepts the retired `X-Agent-Inbox-Management-Token`
+header, but rejects conflicting or duplicate credentials. Upgrade Hub before
+Connectors. SDK transports must strip both spellings from message-only calls.
+
+New message metadata uses `agent_hub_kind` and `agent_hub_label`; readers retain
+`agent_inbox_kind` and `agent_inbox_label` as fallbacks for stored messages.
+The signed v1 Connector release repository and signature domain remain immutable
+compatibility identities. They are not names for new products or packages.

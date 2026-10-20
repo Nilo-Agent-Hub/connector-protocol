@@ -338,7 +338,7 @@ class SyncGateway:
         if "runtime.manage" in manifest["capabilities"]:
             if not management:
                 raise ValueError("Independent management credential is required for runtime.manage")
-            self.headers["X-Agent-Inbox-Management-Token"] = management
+            self.headers["X-Agent-Hub-Management-Token"] = management
         self.opener = build_opener(_NoRedirect())
         self.session = Session.acquire(self.url, token, manifest, state_dir=state_dir)
         self.instance_id = self.session.instance_id
@@ -346,8 +346,16 @@ class SyncGateway:
         self._heartbeat = None
 
     def _raw_call(self, method, path, body=None, headers=None):
+        outgoing = {**self.headers, **(headers or {})}
+        management_path = path.split("?", 1)[0] == "/api/connector/handshake" or path.startswith((
+            "/api/connector/runtime/", "/api/connector/coding/", "/api/connector/native/"))
+        # Message calls must not carry either spelling of the management secret.
+        for key in list(outgoing):
+            if key.lower() == "x-agent-inbox-management-token" or (
+                    key.lower() == "x-agent-hub-management-token" and not management_path):
+                outgoing.pop(key)
         request = Request(self.url + path, data=None if body is None else _encoded(body).encode(),
-                          headers={**self.headers, **(headers or {})}, method=method)
+                          headers=outgoing, method=method)
         try:
             with self.opener.open(request, timeout=self.timeout) as response:
                 raw = response.read(8 * 1024 * 1024 + 1)

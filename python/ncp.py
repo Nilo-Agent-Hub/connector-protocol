@@ -54,6 +54,12 @@ def validate_runtime_capabilities(capabilities: dict) -> None:
         raise ValueError("nativeSettings")
     if "boundSessionSettings" in capabilities and not isinstance(capabilities["boundSessionSettings"], bool):
         raise ValueError("boundSessionSettings")
+    if "nextTurnSettings" in capabilities:
+        keys = capabilities["nextTurnSettings"]
+        if (not isinstance(keys, list) or len(keys) > 64
+                or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", key) for key in keys)
+                or len(set(keys)) != len(keys)):
+            raise ValueError("nextTurnSettings")
     if "commands" in capabilities:
         commands = capabilities["commands"]
         if not isinstance(commands, list) or len(commands) > RUNTIME_MAX_COMMANDS:
@@ -250,7 +256,7 @@ class Client:
         if management and "runtime.manage" in self.bootstrap.manifest.get("capabilities", []):
             if not self.bootstrap.management_token:
                 raise ProtocolError("management_credential_required")
-            headers["X-Agent-Inbox-Management-Token"] = self.bootstrap.management_token
+            headers["X-Agent-Hub-Management-Token"] = self.bootstrap.management_token
         for attempt in range(self.attempts):
             request = urllib.request.Request(self.bootstrap.hub_url + path, data=data, headers=headers, method=method)
             try:

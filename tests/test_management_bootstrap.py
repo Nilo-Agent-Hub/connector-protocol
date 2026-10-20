@@ -37,7 +37,7 @@ class ManagementBootstrapTests(unittest.TestCase):
             client.request('POST', '/api/connector/' + path, {})
             request = client.opener.open.call_args.args[0]
             headers = {key.lower(): value for key, value in request.header_items()}
-            self.assertEqual('x-agent-inbox-management-token' in headers, path not in ('profile', 'inbox'))
+            self.assertEqual('x-agent-hub-management-token' in headers, path not in ('profile', 'inbox'))
         client.bootstrap = dataclasses.replace(client.bootstrap, management_token=None)
         with self.assertRaises(ProtocolError):
             client.request('POST', '/api/connector/runtime/report', {})
