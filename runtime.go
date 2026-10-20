@@ -26,10 +26,12 @@ type RuntimeCommand struct {
 	NewTopic    bool   `json:"newTopic,omitempty"`
 }
 
+var settingKey = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`)
+
 var runtimeCommand = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 // RuntimeCapabilityExtensionKeys are the optional NCP 1.2 RuntimeReport.capabilities fields.
-var RuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "nativeSettings", "commands", "boundSessionSettings"}
+var RuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "nativeSettings", "commands", "boundSessionSettings", "nextTurnSettings"}
 
 // ValidateRuntimeCapabilityExtensions checks the NCP 1.2 fields of a decoded
 // RuntimeReport.capabilities object. Other keys are ignored here.
@@ -62,6 +64,20 @@ func ValidateRuntimeCapabilityExtensions(capabilities map[string]any) error {
 	if value, ok := capabilities["boundSessionSettings"]; ok {
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("invalid boundSessionSettings")
+		}
+	}
+	if value, ok := capabilities["nextTurnSettings"]; ok {
+		keys, ok := value.([]any)
+		if !ok || len(keys) > 64 {
+			return fmt.Errorf("invalid nextTurnSettings")
+		}
+		seen := map[string]bool{}
+		for _, raw := range keys {
+			key, ok := raw.(string)
+			if !ok || !settingKey.MatchString(key) || seen[key] {
+				return fmt.Errorf("invalid nextTurnSettings")
+			}
+			seen[key] = true
 		}
 	}
 	if value, ok := capabilities["commands"]; ok {

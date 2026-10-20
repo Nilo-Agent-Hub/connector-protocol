@@ -261,6 +261,7 @@ adapter kind. All fields are optional members of `capabilities`:
 | `nativeSettings` | `codex` or `claude` | The native settings contract the runtime speaks (native editors, native update and confirmation rules). Absent means generic `settings` only. |
 | `commands` | at most 64 `{command,description,usage?,newTopic?}` | Text commands the runtime understands. `command` matches `^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` and is unique case-insensitively; `description` and `usage` have 1–200 code points. Input whose first word is a `newTopic:true` command, optionally followed by `@name`, opens a new Hub topic instead of being delivered to the current one. |
 | `boundSessionSettings` | boolean | Settings remain editable for a conversation bound to an imported native session. |
+| `nextTurnSettings` | up to 64 unique setting keys | Explicit opt-in to saving these fields for the next turn, including while running or waiting. Requires the gateway opt-in below. |
 
 Connectors must declare protocol minor 2 before reporting these fields. A
 Connector whose manifest declares minor 2 is the sole authority for them: an
@@ -280,11 +281,14 @@ Generic settings reports have this shape:
 
 Setting keys match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$`, with at most 64 keys.
 Values are JSON null, booleans, finite numbers, or strings up to 1024 bytes.
-Each `allowed` list has 1–64 scalar choices. `source` is `runtime` or `defaults`.
+Each `allowed` list has 1–64 scalar choices. `source` is `runtime` or `defaults`;
+with the next-turn extension it may also be `configuration` for durably saved
+conversation settings, which are not claims about an active turn.
 The owner submits a normal runtime request with `kind:"update-settings"` and
 `payload:{settings:{mode:"fast"}}`. Hub admits only choices in the reported
 `allowed` sets, and successful completion must report `source:"runtime"` and
-the requested actual values. Arbitrary opaque configuration cannot pass through.
+the requested actual values, or a durable `configuration` receipt under the
+next-turn extension below. Arbitrary opaque configuration cannot pass through.
 
 #### Initial selection and future conversation defaults
 
@@ -514,3 +518,31 @@ bootstrap, not environment inheritance or argv. Keep local state private, bind
 it to Hub origin plus agent and connector identity, and use an exclusive journal
 lock. Revoking the agent's message token stops future Hub access but cannot erase
 data an executable already read or stop an already-submitted upstream operation.
+
+#### Next-turn settings extension
+
+This optional extension retains NCP 1.2 manifests and request shapes. A gateway
+opts in with `nextTurnSettings:true` in its `POST /connector/coding/connect`
+response. A Connector must omit `capabilities.nextTurnSettings` and the new
+`configuration` source in `settings` and `codex` until this opt-in is received
+on the current connection. Existing native Claude configuration reports retain
+their original source semantics.
+Older gateways therefore continue to receive their original reports. An absent
+or empty capability never permits busy writes; the gateway must not synthesize
+it from an Agent kind.
+
+`nextTurnSettings` uses the setting-key grammar above. A nonempty patch can be
+saved while running/waiting only when `updateSettings:true` and every patch key
+is declared, allowed, and authorized. Unknown execution state, maintenance and
+stale instances still block writes. This is not permission to change models or
+other management operations.
+
+Success means durable storage before acknowledgement. `settings.values` (and a
+native settings projection) reports the saved selection with source
+`configuration`; `environment` continues to describe actual execution. A later
+successful patch replaces the saved keys. Before starting the next turn, the
+Connector applies the saved selection; on failure it must not execute input
+under the previous permissions. A running turn, steered input, an outstanding
+approval or an already executing tool is unaffected. Saved configuration must
+survive reconnects and restarts; no automatic approval is implied. Clients may
+use the simple notice “Applies next turn”.
