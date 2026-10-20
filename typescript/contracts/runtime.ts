@@ -161,7 +161,7 @@ export const RUNTIME_MAX_COMMANDS = 64;
 
 export interface RuntimeCapabilities {
   /** Consume frozen conversation.runtimeSelection before first native input; includes opt-in NCP 1.2 messaging Connectors. */
-  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean;
+  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reviewChanges?: boolean;
   reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean;
   initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean;
   asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw';
