@@ -175,6 +175,8 @@ export interface RuntimeCapabilities {
   commands?: RuntimeCommand[];
   /** NCP 1.2: settings stay editable for a conversation bound to an imported native session. */
   boundSessionSettings?: boolean;
+  /** Keys durably saved for the next turn, including while running. Requires gateway opt-in. */
+  nextTurnSettings?: string[];
 }
 
 /** Returns a reason string when `value` violates the NCP 1.2 runtime capability rules, else null. */
@@ -189,6 +191,10 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
   }
   if ('nativeSettings' in value && value.nativeSettings !== 'codex' && value.nativeSettings !== 'claude') return 'nativeSettings';
   if ('boundSessionSettings' in value && typeof value.boundSessionSettings !== 'boolean') return 'boundSessionSettings';
+  if ('nextTurnSettings' in value) {
+    const keys = value.nextTurnSettings;
+    if (!Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))) return 'nextTurnSettings';
+  }
   if ('commands' in value) {
     const commands = value.commands;
     if (!Array.isArray(commands) || commands.length > RUNTIME_MAX_COMMANDS) return 'commands';
@@ -206,6 +212,11 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
   return null;
 }
 
+/** A nonempty patch may be deferred only when every key was explicitly advertised. */
+export function supportsNextTurnSettings(capabilities: Pick<RuntimeCapabilities, 'nextTurnSettings' | 'updateSettings'> | undefined, keys: readonly string[]): boolean {
+  return capabilities?.updateSettings === true && keys.length > 0 && keys.every(key => capabilities.nextTurnSettings?.includes(key));
+}
+
 /** True when `text` invokes a declared `newTopic` command: the command, optionally `@name`, then whitespace or end. */
 export function startsNewTopicCommand(commands: readonly RuntimeCommand[] | undefined, text: string): boolean {
   const head = (text.trim().split(/\s/, 1)[0] ?? '').replace(/@[A-Za-z0-9_]+$/, '').toLowerCase();
@@ -219,7 +230,7 @@ export interface RuntimeReport {
   piInstanceId?: string;
   claudeInstanceId?: string;
   runtimeInstanceId?: string;
-  settings?: { values: Record<string, RuntimeSettingValue>; allowed: Record<string, RuntimeSettingValue[]>; source: 'runtime' | 'defaults' };
+  settings?: { values: Record<string, RuntimeSettingValue>; allowed: Record<string, RuntimeSettingValue[]>; source: 'runtime' | 'defaults' | 'configuration' };
   runtimeUpdate?: RuntimeUpdateInfo;
   maintenance?: boolean;
   conversationId: string | null;

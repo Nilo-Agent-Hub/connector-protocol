@@ -54,6 +54,12 @@ def validate_runtime_capabilities(capabilities: dict) -> None:
         raise ValueError("nativeSettings")
     if "boundSessionSettings" in capabilities and not isinstance(capabilities["boundSessionSettings"], bool):
         raise ValueError("boundSessionSettings")
+    if "nextTurnSettings" in capabilities:
+        keys = capabilities["nextTurnSettings"]
+        if (not isinstance(keys, list) or len(keys) > 64
+                or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", key) for key in keys)
+                or len(set(keys)) != len(keys)):
+            raise ValueError("nextTurnSettings")
     if "commands" in capabilities:
         commands = capabilities["commands"]
         if not isinstance(commands, list) or len(commands) > RUNTIME_MAX_COMMANDS:

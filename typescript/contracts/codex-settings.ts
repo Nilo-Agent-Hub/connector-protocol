@@ -20,7 +20,7 @@ export interface CodexOptions {
 export type CodexSelection = CodexOptions & { model?: string; effort?: string };
 export interface CodexSettingsReport {
   values: CodexOptions;
-  source: 'runtime' | 'defaults';
+  source: 'runtime' | 'defaults' | 'configuration';
   allowed: { approvalPolicies: string[]; sandboxModes: string[]; approvalsReviewers: string[]; collaborationModes: string[] };
 }
 export const codexOptionKeys = ['approvalPolicy', 'approvalsReviewer', 'sandboxMode', 'networkAccess', 'collaborationMode', 'personality', 'summary', 'serviceTier'] as const;
