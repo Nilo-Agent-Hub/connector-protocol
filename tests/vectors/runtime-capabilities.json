@@ -1,6 +1,7 @@
 {
   "description": "NCP 1.2 RuntimeReport.capabilities declarations shared by the Go, Python and TypeScript tests.",
   "valid": [
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["approvalsReviewer"]},
     {},
     {"nextTurnModel": false},
     {"nextTurnModel": false, "switchModel": false},
@@ -14,6 +15,13 @@
     {"maxInputLength": 1000000, "modelScopes": ["draft", "conversation", "defaults"]}
   ],
   "invalid": [
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["notDeclared"]},
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["approvalsReviewer", "approvalsReviewer"]},
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": [null]},
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["bad key"]},
+    {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": "approvalsReviewer"},
+    {"updateSettings": false, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["approvalsReviewer"]},
+    {"updateSettings": true, "liveTurnSettings": ["approvalsReviewer"]},
     {"nextTurnModel": true},
     {"nextTurnModel": true, "switchModel": false},
     {"nextTurnModel": true, "switchModel": 1},
