@@ -177,6 +177,8 @@ export interface RuntimeCapabilities {
   boundSessionSettings?: boolean;
   /** Keys durably saved for the next turn, including while running. Requires gateway opt-in. */
   nextTurnSettings?: string[];
+  /** Save model and optional effort for the next turn while running/waiting. Requires switchModel and gateway opt-in. */
+  nextTurnModel?: boolean;
 }
 
 /** Returns a reason string when `value` violates the NCP 1.2 runtime capability rules, else null. */
@@ -195,6 +197,7 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
     const keys = value.nextTurnSettings;
     if (!Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))) return 'nextTurnSettings';
   }
+  if ('nextTurnModel' in value && (typeof value.nextTurnModel !== 'boolean' || value.nextTurnModel && value.switchModel !== true)) return 'nextTurnModel';
   if ('commands' in value) {
     const commands = value.commands;
     if (!Array.isArray(commands) || commands.length > RUNTIME_MAX_COMMANDS) return 'commands';
@@ -215,6 +218,11 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
 /** A nonempty patch may be deferred only when every key was explicitly advertised. */
 export function supportsNextTurnSettings(capabilities: Pick<RuntimeCapabilities, 'nextTurnSettings' | 'updateSettings'> | undefined, keys: readonly string[]): boolean {
   return capabilities?.updateSettings === true && keys.length > 0 && keys.every(key => capabilities.nextTurnSettings?.includes(key));
+}
+
+/** Model writes may be deferred only when both capabilities were explicitly advertised. */
+export function supportsNextTurnModel(capabilities: Pick<RuntimeCapabilities, 'nextTurnModel' | 'switchModel'> | undefined): boolean {
+  return capabilities?.switchModel === true && capabilities.nextTurnModel === true;
 }
 
 /** True when `text` invokes a declared `newTopic` command: the command, optionally `@name`, then whitespace or end. */
