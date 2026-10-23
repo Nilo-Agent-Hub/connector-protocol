@@ -671,8 +671,8 @@ native settings projection) reports the saved selection with source
 `configuration`; `environment` continues to describe actual execution. A later
 successful patch replaces the saved keys. Before starting the next turn, the
 Connector applies the saved selection; on failure it must not execute input
-under the previous permissions. Unless the live-turn extension below is negotiated for a field, a running turn
-and steered input are unaffected. Outstanding approvals and executing tools
+under the previous permissions. Unless the live-turn extension below is
+negotiated for a field, a running turn and steered input are unaffected. Outstanding approvals and executing tools
 always retain their original authorization. Saved configuration must
 survive reconnects and restarts; no automatic approval is implied. Clients may
 use the simple notice “Applies next turn”.
@@ -717,7 +717,6 @@ selection. Saving does not answer a question, approve an action or resume work.
 This contract describes persistence and application ordering; protocol fixture
 validation alone does not establish a runtime's implementation of those rules.
 
-
 #### Live-turn settings extension
 
 A gateway opts in with `liveTurnSettings:true` in its coding-connect response.
@@ -744,7 +743,6 @@ is scoped to the exact native turn and must not leak into a later turn or surviv
 a lost native process as a fact. Unknown writes must not be automatically replayed
 or acknowledged as success. Reconnection negotiates support again. A target that
 finishes during the operation uses the saved selection on its next turn.
-
 
 ## Brand migration (2026-10-15)
 
