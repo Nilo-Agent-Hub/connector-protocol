@@ -262,6 +262,7 @@ adapter kind. All fields are optional members of `capabilities`:
 | `commands` | at most 64 `{command,description,usage?,newTopic?}` | Text commands the runtime understands. `command` matches `^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` and is unique case-insensitively; `description` and `usage` have 1–200 code points. Input whose first word is a `newTopic:true` command, optionally followed by `@name`, opens a new Hub topic instead of being delivered to the current one. |
 | `boundSessionSettings` | boolean | Settings remain editable for a conversation bound to an imported native session. |
 | `nextTurnSettings` | up to 64 unique setting keys | Explicit opt-in to saving these fields for the next turn, including while running or waiting. Requires the gateway opt-in below. |
+| `nextTurnModel` | boolean | Explicit opt-in to saving a conversation's model and optional reasoning effort for the next turn, including while running or waiting. `true` requires `switchModel:true` and the separate gateway opt-in below. |
 
 Connectors must declare protocol minor 2 before reporting these fields. A
 Connector whose manifest declares minor 2 is the sole authority for them: an
@@ -673,6 +674,46 @@ under the previous permissions. A running turn, steered input, an outstanding
 approval or an already executing tool is unaffected. Saved configuration must
 survive reconnects and restarts; no automatic approval is implied. Clients may
 use the simple notice “Applies next turn”.
+
+#### Next-turn model extension
+
+This independent optional extension retains NCP 1.2 manifests and the existing
+`switch-model` request (`choiceId`, optional `effort`, and `conversationId`). A
+gateway opts in with `nextTurnModel:true` in its coding-connect response
+(`/api/connector/coding/connect` for NCP Connectors). A Connector must omit
+`capabilities.nextTurnModel` until this opt-in is received on the current
+connection. Reconnects negotiate it again. `nextTurnSettings` alone never grants
+permission to defer a model change, and the gateway must not synthesize
+`nextTurnModel` from an Agent kind. No protocol version or manifest schema
+change is needed: older peers keep their existing reports and busy rejection.
+
+`nextTurnModel:true` is valid only with `switchModel:true`. The existing model
+scope, ownership, available-choice and reasoning-effort checks still apply.
+After negotiation, a conversation's `switch-model` request may save its next
+turn selection while the conversation is running or waiting for input or an
+approval. Missing or false capability preserves the existing idle-only rule;
+unknown execution state, maintenance and stale instances still block writes.
+This capability does not grant new instance-default scopes, permit immediate
+runtime mutation during a turn, or authorize other management operations.
+
+Success means the Connector durably saved the model and resolved reasoning
+effort before acknowledgement. Omitted `effort` follows the runtime's existing
+validated model-switch default rules; it must not carry an unsupported effort
+from the previous model. Reports expose the saved model in `model` with
+`source:"configuration"` and its saved effort in `reasoning.effort` (or `null`
+when the selected model has no effort). `lastUsedModel` continues to describe
+actual execution; saving a choice must not claim it has already been used.
+Clients can show the saved choice with the notice “Applies next turn”.
+
+Requests are serialized with turn admission. The last successfully committed
+selection wins, survives reconnection and restart, and is applied before the
+next turn starts. A failed save leaves the previous durable selection intact.
+If applying the saved selection fails, the Connector must not execute the next
+input using a stale model or effort. A running turn, steered input, outstanding
+question or approval, and an already executing tool retain their current
+selection. Saving does not answer a question, approve an action or resume work.
+This contract describes persistence and application ordering; protocol fixture
+validation alone does not establish a runtime's implementation of those rules.
 
 ## Brand migration (2026-10-15)
 
