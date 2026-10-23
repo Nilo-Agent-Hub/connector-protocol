@@ -24,6 +24,7 @@ jobs:
       - run: python3 conformance.py
       - run: python3 -m unittest discover -s python/tests -v
       - run: node --test typescript/test/*.test.mjs
+      - run: npm exec --yes --package typescript@5.9.3 -- tsc -p typescript/tsconfig.json
       - run: |
           python3 build_echo.py --output ./dist/echo-connector
           python3 conformance.py --executable ./dist/echo-connector --manifest ./examples/echo.manifest.json

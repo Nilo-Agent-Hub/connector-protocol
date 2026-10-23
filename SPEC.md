@@ -249,6 +249,25 @@ fields remain `conversationId`, `runtimeVersion`, `capabilities`, `model`,
 `ephemeral` or `inline`. These reports describe supported behavior; they cannot
 expand the manifest's approved access.
 
+The public runtime model is separate from native adapter compatibility. New
+TypeScript implementations use `contracts/runtime-core.ts` for generic
+capabilities, reports, requests, views and frozen selections. Its settings are
+bounded scalars with an explicit allowed-value table; its request kinds contain
+only provider-independent operations. `contracts/runtime-compat.ts` adds the
+installed native fields and request aliases, including the legacy signed
+Connector update evidence. `contracts/runtime.ts` remains the compatibility
+facade with its existing exports. This source-level separation changes neither
+NCP 1.1/1.2 wire behavior nor the version negotiation rules.
+
+An unknown, valid namespaced Connector identity may use the generic model without
+reporting any native settings contract. The `nativeSettings` enumeration below
+identifies two existing adapter contracts; it is not an identity allowlist and is
+not extensible by sending a new string. Native settings still obey their own
+field/enum validation, and generic settings cannot bypass those rules. Unknown
+wire fields, request kinds and invalid or unadvertised settings remain rejected.
+Conflicting generic and legacy runtime identities remain validation errors;
+the SDK split does not change fencing, update recovery or uncertain outcomes.
+
 #### Runtime capability declarations (NCP 1.2)
 
 A runtime describes behavior the Hub and its clients must not infer from an
