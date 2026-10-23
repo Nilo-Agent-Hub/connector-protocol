@@ -177,6 +177,8 @@ export interface RuntimeCapabilities {
   boundSessionSettings?: boolean;
   /** Keys durably saved for the next turn, including while running. Requires gateway opt-in. */
   nextTurnSettings?: string[];
+  /** Confirmed updates also affect subsequent active-turn operations; captured steps/approvals are unchanged. Gateway opt-in required. */
+  liveTurnSettings?: string[];
   /** Save model and optional effort for the next turn while running/waiting. Requires switchModel and gateway opt-in. */
   nextTurnModel?: boolean;
 }
@@ -198,6 +200,10 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
     if (!Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))) return 'nextTurnSettings';
   }
   if ('reviewUncommitted' in value && (typeof value.reviewUncommitted !== 'boolean' || value.reviewUncommitted && value.reviewChanges !== true)) return 'reviewUncommitted';
+  if ('liveTurnSettings' in value) {
+    const keys = value.liveTurnSettings, next = value.nextTurnSettings;
+    if (value.updateSettings !== true || !Array.isArray(next) || !Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key) || !Array.isArray(next) || !next.includes(key))) return 'liveTurnSettings';
+  }
   if ('nextTurnModel' in value && (typeof value.nextTurnModel !== 'boolean' || value.nextTurnModel && value.switchModel !== true)) return 'nextTurnModel';
   if ('commands' in value) {
     const commands = value.commands;

@@ -64,6 +64,14 @@ def validate_runtime_capabilities(capabilities: dict) -> None:
         enabled = capabilities["reviewUncommitted"]
         if not isinstance(enabled, bool) or enabled and capabilities.get("reviewChanges") is not True:
             raise ValueError("reviewUncommitted")
+    if "liveTurnSettings" in capabilities:
+        keys, next_keys = capabilities["liveTurnSettings"], capabilities.get("nextTurnSettings")
+        if (capabilities.get("updateSettings") is not True or not isinstance(keys, list)
+                or not isinstance(next_keys, list) or len(keys) > 64
+                or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", key)
+                       or key not in next_keys for key in keys)
+                or len(set(keys)) != len(keys)):
+            raise ValueError("liveTurnSettings")
     if "nextTurnModel" in capabilities:
         enabled = capabilities["nextTurnModel"]
         if not isinstance(enabled, bool) or (enabled and capabilities.get("switchModel") is not True):

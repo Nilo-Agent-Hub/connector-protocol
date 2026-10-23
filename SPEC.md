@@ -262,6 +262,7 @@ adapter kind. All fields are optional members of `capabilities`:
 | `commands` | at most 64 `{command,description,usage?,newTopic?}` | Text commands the runtime understands. `command` matches `^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` and is unique case-insensitively; `description` and `usage` have 1–200 code points. Input whose first word is a `newTopic:true` command, optionally followed by `@name`, opens a new Hub topic instead of being delivered to the current one. |
 | `boundSessionSettings` | boolean | Settings remain editable for a conversation bound to an imported native session. |
 | `nextTurnSettings` | up to 64 unique setting keys | Explicit opt-in to saving these fields for the next turn, including while running or waiting. Requires the gateway opt-in below. |
+| `liveTurnSettings` | up to 64 unique setting keys | Gateway-negotiated subset of `nextTurnSettings` that also applies to subsequent operations in an active turn; see below. |
 | `nextTurnModel` | boolean | Explicit opt-in to saving a conversation's model and optional reasoning effort for the next turn, including while running or waiting. `true` requires `switchModel:true` and the separate gateway opt-in below. |
 
 Connectors must declare protocol minor 2 before reporting these fields. A
@@ -712,8 +713,9 @@ native settings projection) reports the saved selection with source
 `configuration`; `environment` continues to describe actual execution. A later
 successful patch replaces the saved keys. Before starting the next turn, the
 Connector applies the saved selection; on failure it must not execute input
-under the previous permissions. A running turn, steered input, an outstanding
-approval or an already executing tool is unaffected. Saved configuration must
+under the previous permissions. Unless the live-turn extension below is
+negotiated for a field, a running turn and steered input are unaffected. Outstanding approvals and executing tools
+always retain their original authorization. Saved configuration must
 survive reconnects and restarts; no automatic approval is implied. Clients may
 use the simple notice “Applies next turn”.
 
@@ -756,6 +758,33 @@ question or approval, and an already executing tool retain their current
 selection. Saving does not answer a question, approve an action or resume work.
 This contract describes persistence and application ordering; protocol fixture
 validation alone does not establish a runtime's implementation of those rules.
+
+#### Live-turn settings extension
+
+A gateway opts in with `liveTurnSettings:true` in its coding-connect response.
+The Connector must omit `capabilities.liveTurnSettings` and retain next-turn
+semantics until this opt-in is received on the current connection. The capability
+requires `updateSettings:true` and every declared key must also be declared in
+`nextTurnSettings`. Clients must use the declaration, never infer support from
+an Agent kind, version string, or an unrelated permission setting.
+
+The existing authorized update-settings patch both durably saves future-turn
+selection and updates the declared fields for subsequent operations in the active
+turn. Undeclared fields in a mixed patch retain next-turn semantics. Success
+requires native confirmation of live publication, or confirmation that the target
+turn is no longer available, plus durable storage. A live update does not rewrite
+already captured steps, outstanding approvals, child sessions, or executing tools.
+It never authorizes automatically accepting a pending request. Runtimes may reject
+unsupported changes; clients must not interpret an updated thread setting as a
+confirmed active-turn setting.
+
+`settings.values` continues to describe the saved selection. `environment`
+continues to describe confirmed execution facts; fields whose live outcome is
+unknown must not retain a misleading last-known value. A confirmed live override
+is scoped to the exact native turn and must not leak into a later turn or survive
+a lost native process as a fact. Unknown writes must not be automatically replayed
+or acknowledged as success. Reconnection negotiates support again. A target that
+finishes during the operation uses the saved selection on its next turn.
 
 ## Brand migration (2026-10-15)
 
