@@ -12,9 +12,6 @@ import (
 // RuntimeModelScopes are the NCP 1.2 scopes in which an owner may choose a model.
 var RuntimeModelScopes = []string{"draft", "conversation", "defaults"}
 
-// RuntimeNativeSettings are the NCP 1.2 native settings contract ids.
-var RuntimeNativeSettings = []string{"codex", "claude"}
-
 const RuntimeMaxInputLength = 1000000
 const RuntimeMaxCommands = 64
 
@@ -30,12 +27,12 @@ var settingKey = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`)
 
 var runtimeCommand = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
-// RuntimeCapabilityExtensionKeys are the optional NCP 1.2 RuntimeReport.capabilities fields.
-var RuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "nativeSettings", "commands", "boundSessionSettings", "nextTurnSettings", "nextTurnModel"}
+// GenericRuntimeCapabilityExtensionKeys are the provider-independent NCP 1.2 capability fields.
+var GenericRuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "commands", "boundSessionSettings", "nextTurnSettings", "nextTurnModel"}
 
-// ValidateRuntimeCapabilityExtensions checks the NCP 1.2 fields of a decoded
-// RuntimeReport.capabilities object. Other keys are ignored here.
-func ValidateRuntimeCapabilityExtensions(capabilities map[string]any) error {
+// ValidateGenericRuntimeCapabilityExtensions checks provider-independent NCP 1.2
+// capability extensions. The enclosing wire boundary validates all other keys.
+func ValidateGenericRuntimeCapabilityExtensions(capabilities map[string]any) error {
 	if value, ok := capabilities["maxInputLength"]; ok {
 		n, ok := value.(float64)
 		if !ok || n != math.Trunc(n) || n < 1 || n > RuntimeMaxInputLength {
@@ -54,11 +51,6 @@ func ValidateRuntimeCapabilityExtensions(capabilities map[string]any) error {
 				return fmt.Errorf("invalid modelScopes")
 			}
 			seen[scope] = true
-		}
-	}
-	if value, ok := capabilities["nativeSettings"]; ok {
-		if s, ok := value.(string); !ok || !contains(RuntimeNativeSettings, s) {
-			return fmt.Errorf("invalid nativeSettings")
 		}
 	}
 	if value, ok := capabilities["boundSessionSettings"]; ok {

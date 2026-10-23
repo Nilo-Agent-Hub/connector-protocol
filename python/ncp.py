@@ -27,6 +27,8 @@ import uuid
 VERSION = "1.2.0"
 SUPPORTED_PROTOCOLS = ({"major": 1, "minor": 0}, {"major": 1, "minor": 1}, {"major": 1, "minor": 2})
 RUNTIME_MODEL_SCOPES = ("draft", "conversation", "defaults")
+# Compatibility contract ids, not Connector identities or arbitrary settings namespaces.
+# Kept in this standalone SDK module so existing copied SDKs and zipapps remain self-contained.
 RUNTIME_NATIVE_SETTINGS = ("codex", "claude")
 RUNTIME_MAX_INPUT_LENGTH = 1_000_000
 RUNTIME_MAX_COMMANDS = 64
@@ -37,8 +39,8 @@ def _bounded_text(value) -> bool:
     return isinstance(value, str) and 1 <= len(value) <= 200
 
 
-def validate_runtime_capabilities(capabilities: dict) -> None:
-    """Raise ValueError if the NCP 1.2 fields of RuntimeReport.capabilities are invalid."""
+def validate_generic_runtime_capabilities(capabilities: dict) -> None:
+    """Validate generic NCP 1.2 extensions; the enclosing boundary validates other fields."""
     if not isinstance(capabilities, dict):
         raise ValueError("capabilities")
     if "maxInputLength" in capabilities:
@@ -50,8 +52,6 @@ def validate_runtime_capabilities(capabilities: dict) -> None:
         if (not isinstance(scopes, list) or len(set(map(str, scopes))) != len(scopes)
                 or any(scope not in RUNTIME_MODEL_SCOPES for scope in scopes)):
             raise ValueError("modelScopes")
-    if "nativeSettings" in capabilities and capabilities["nativeSettings"] not in RUNTIME_NATIVE_SETTINGS:
-        raise ValueError("nativeSettings")
     if "boundSessionSettings" in capabilities and not isinstance(capabilities["boundSessionSettings"], bool):
         raise ValueError("boundSessionSettings")
     if "nextTurnSettings" in capabilities:
@@ -77,6 +77,20 @@ def validate_runtime_capabilities(capabilities: dict) -> None:
                     or ("newTopic" in item and not isinstance(item["newTopic"], bool))):
                 raise ValueError("commands")
             seen.add(item["command"].lower())
+
+
+def _validate_native_runtime_capabilities(capabilities: dict) -> None:
+    """Existing native contract boundary; custom Connectors omit nativeSettings."""
+    if "nativeSettings" in capabilities and capabilities["nativeSettings"] not in RUNTIME_NATIVE_SETTINGS:
+        raise ValueError("nativeSettings")
+
+
+def validate_runtime_capabilities(capabilities: dict) -> None:
+    """Compatibility entry point for generic and existing native capability contracts."""
+    if not isinstance(capabilities, dict):
+        raise ValueError("capabilities")
+    _validate_native_runtime_capabilities(capabilities)
+    validate_generic_runtime_capabilities(capabilities)
 
 
 def starts_new_topic(commands, text: str) -> bool:

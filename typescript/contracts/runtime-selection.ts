@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: MIT
-import type { RuntimeReport, RuntimeSelection } from './runtime.js';
+import type { RuntimeReport, RuntimeSelection } from './runtime-core.js';
+
+/** Only the public fields needed to validate a frozen selection, also accepted from compatibility reports. */
+export type RuntimeSelectionReport = Pick<RuntimeReport, 'models' | 'settings'> & {
+  capabilities: Pick<RuntimeReport['capabilities'], 'sessionSelection' | 'switchModel' | 'reasoning' | 'updateSettings'>;
+};
 
 /** Reject an unavailable frozen selection before making any upstream call. */
-export function assertRuntimeSelection(selection: RuntimeSelection, report: RuntimeReport): void {
+export function assertRuntimeSelection(selection: RuntimeSelection, report: RuntimeSelectionReport): void {
   const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
   const text = (v: unknown) => typeof v === 'string' && v.length > 0 && new TextEncoder().encode(v).length <= 256;
   const invalid = () => { throw new Error('Session selection is invalid or no longer supported'); };

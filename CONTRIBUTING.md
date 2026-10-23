@@ -22,6 +22,7 @@ go vet ./...
 python3 conformance.py
 python3 -m unittest discover -s python/tests -v
 node --test typescript/test/*.test.mjs
+npm exec --yes --package typescript@5.9.3 -- tsc -p typescript/tsconfig.json
 python3 build_echo.py --output ./dist/echo-connector
 python3 conformance.py --executable ./dist/echo-connector --manifest ./examples/echo.manifest.json
 ```
