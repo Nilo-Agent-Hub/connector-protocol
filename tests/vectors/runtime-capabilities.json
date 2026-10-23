@@ -1,6 +1,8 @@
 {
   "description": "NCP 1.2 RuntimeReport.capabilities declarations shared by the Go, Python and TypeScript tests.",
   "valid": [
+    {"reviewUncommitted": false},
+    {"reviewChanges": true, "reviewUncommitted": true},
     {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["approvalsReviewer"]},
     {},
     {"nextTurnModel": false},
@@ -15,6 +17,9 @@
     {"maxInputLength": 1000000, "modelScopes": ["draft", "conversation", "defaults"]}
   ],
   "invalid": [
+    {"reviewUncommitted": true},
+    {"reviewChanges": false, "reviewUncommitted": true},
+    {"reviewChanges": true, "reviewUncommitted": 1},
     {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["notDeclared"]},
     {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": ["approvalsReviewer", "approvalsReviewer"]},
     {"updateSettings": true, "nextTurnSettings": ["approvalsReviewer"], "liveTurnSettings": [null]},

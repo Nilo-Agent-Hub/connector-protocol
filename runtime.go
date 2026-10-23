@@ -31,7 +31,7 @@ var settingKey = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`)
 var runtimeCommand = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 // RuntimeCapabilityExtensionKeys are the optional NCP 1.2 RuntimeReport.capabilities fields.
-var RuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "nativeSettings", "commands", "boundSessionSettings", "nextTurnSettings", "nextTurnModel", "liveTurnSettings"}
+var RuntimeCapabilityExtensionKeys = []string{"maxInputLength", "modelScopes", "nativeSettings", "commands", "boundSessionSettings", "nextTurnSettings", "nextTurnModel", "reviewUncommitted", "liveTurnSettings"}
 
 // ValidateRuntimeCapabilityExtensions checks the NCP 1.2 fields of a decoded
 // RuntimeReport.capabilities object. Other keys are ignored here.
@@ -78,6 +78,12 @@ func ValidateRuntimeCapabilityExtensions(capabilities map[string]any) error {
 				return fmt.Errorf("invalid nextTurnSettings")
 			}
 			seen[key] = true
+		}
+	}
+	if value, ok := capabilities["reviewUncommitted"]; ok {
+		enabled, ok := value.(bool)
+		if !ok || enabled && capabilities["reviewChanges"] != true {
+			return fmt.Errorf("invalid reviewUncommitted")
 		}
 	}
 	if value, ok := capabilities["liveTurnSettings"]; ok {
