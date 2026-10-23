@@ -274,6 +274,33 @@ that predate NCP 1.2 may the Hub supply unreported fields from its own fallback
 profile. `codexDefaults` on a runtime view is a
 read-only projection of `selectionDefaults`; the Hub stores one copy.
 
+#### Native file-change activity detail
+
+A gateway may opt in with `nativeFileChanges:true` in the existing coding-connect
+response. After negotiation, `runtimeActivity.detail` may contain
+`{type:"edit",changes:[{path,kind,diff,previousPath?,truncated?}],truncated?}`.
+Each `kind` is `add`, `delete`, or `update`; a move uses `update` and
+`previousPath`. There are at most 64 entries and at most 128 KiB aggregate UTF-8
+`diff` bytes. Paths are nonempty display strings of at most 4096 UTF-8 bytes,
+without control characters. They may be absolute native display paths; they are
+never authority or arguments for a filesystem read. `truncated:true` marks
+omitted entries or bytes. Implementations may apply smaller transport bounds.
+
+This payload is public native tool output. It uses `channel.metadata`, the
+existing activity identity, process binding and process-detail retention. It is
+not a remote `files.read` operation and does not assert that a Git repository
+exists. Do not invoke Git or read files to reconstruct a missing native event.
+An edit's native lifecycle remains authoritative: `completed` means the native
+operation completed, `failed` remains failed, a refusal/cancellation is stopped,
+and unknown status must not be inferred as success. Preserve one native item
+identity across updates and do not duplicate it using turn-wide diff summaries.
+
+Before negotiation or with older peers, omit `detail` while retaining the
+existing activity summary. Re-negotiate on reconnect. Changes to detail must
+participate in durable message revision, retry and PATCH handling, including
+updates with unchanged summary text. An activity detail is historical output;
+it must never be presented as the current contents of the workspace.
+
 #### Read-only repository changes
 
 A Connector may report optional `capabilities.reviewChanges:true` to offer a
@@ -300,7 +327,7 @@ review allowlist and keep directory, byte-size and sensitive-file restrictions;
 an unfamiliar extension must not become readable merely because Git tracks it.
 
 The owner submits the existing runtime request envelope with a non-null
-`conversationId`. Only these payloads are accepted:
+`conversationId`. The baseline payloads are:
 
 ```json
 {"conversationId":"8847a81c-661c-4813-aa13-a9086b896ae6","kind":"list-changes","payload":{}}
@@ -316,6 +343,19 @@ omit metadata that the file policy does not allow to be disclosed. Review must
 not stage, discard, commit, edit, or otherwise change repository state. Git
 external diff helpers and text converters must not execute as part of review.
 Symlink targets and submodule working trees must not be followed for content.
+
+An independent negotiated `reviewUncommitted:true` coding-connect response
+allows supporting Connectors to report `capabilities.reviewUncommitted:true`
+only together with `reviewChanges:true`. Clients may then send
+`list-changes` with `payload:{"compare":"uncommitted"}`. The resulting snapshot
+uses `area:"working-tree"`, with one entry per current path, and compares HEAD
+to the current working tree including untracked files. Staged and unstaged
+changes must not appear as separate entries, and edits which cancel out against
+HEAD must not appear as a net modification. An unborn repository uses an empty
+baseline. The selected comparison is bound to the snapshot and later diff
+reads. An omitted `compare` preserves the existing staged/unstaged/untracked
+semantics; do not relabel the legacy result as a combined comparison. Unsupported
+Connectors must reject the explicit comparison rather than silently substituting.
 
 A successful `list-changes` returns `result.changes`:
 
@@ -337,7 +377,7 @@ A successful `list-changes` returns `result.changes`:
 There are at most 500 entries; `truncated:true` means eligible entries were
 omitted by that limit. Each entry has a unique `id` within the snapshot, a
 repository-relative `path`, optional `previousPath` for a rename, `area`
-(`staged`, `unstaged`, `untracked`), and `status` (`added`, `modified`, `deleted`,
+(`staged`, `unstaged`, `untracked`, or negotiated `working-tree`), and `status` (`added`, `modified`, `deleted`,
 `renamed`, `conflicted`, `typechanged`). Optional `additions` and `deletions` are
 non-negative integers or null; omitted or null counts mean unknown, not zero.
 The same path may have separate staged and unstaged entries with different IDs.
@@ -387,7 +427,9 @@ show a newly read diff under an older snapshot. Result admission also checks
 that the runtime epoch is still current, just as for other result-only reads.
 
 Defined failures include `changes_changed` (refresh the list), `not_repository`
-(the conversation's directory is not in a repository), `git_unavailable`
+(the conversation's directory is not in a repository),
+`repository_root_required` (the directory belongs to a repository but is not its
+root and the Connector does not support scoped subdirectory review), `git_unavailable`
 (Git cannot be used), `review_unavailable` (the scoped review cannot be provided),
 and existing `unsupported` or authorization errors. Error messages must not
 contain protected paths, file contents, credentials, or raw subprocess output.

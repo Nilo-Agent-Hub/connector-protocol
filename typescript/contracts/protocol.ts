@@ -121,6 +121,20 @@ export interface CodingInput extends CodingInputSelection {
   /** The owner settled an uncertain execution; it no longer counts as backlog. */
   reviewed?: boolean;
 }
+/** Native tool output, independent of Git and remote file-read authorization. */
+export interface RuntimeEditDetail {
+  type: 'edit';
+  /** At most 64 entries and 128 KiB aggregate UTF-8 diff bytes. */
+  changes: Array<{
+    /** Display only; never a remote read key. At most 4096 UTF-8 bytes, no controls. */
+    path: string;
+    kind: 'add' | 'delete' | 'update';
+    previousPath?: string;
+    diff: string;
+    truncated?: boolean;
+  }>;
+  truncated?: boolean;
+}
 export interface RuntimeActivity {
   id: string;
   category: 'skill' | 'task' | 'tool' | 'request';
@@ -131,6 +145,8 @@ export interface RuntimeActivity {
   tool?: string;
   toolInput?: string;
   toolOutput?: string;
+  /** Send only after nativeFileChanges negotiation; retain with process details. */
+  detail?: RuntimeEditDetail;
   elapsedSeconds?: number;
   attempt?: number;
   maxRetries?: number;

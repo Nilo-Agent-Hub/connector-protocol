@@ -85,7 +85,7 @@ export interface RuntimeChangeEntry {
   /** Repository-relative paths, subject to the existing file-read policy. */
   path: string;
   previousPath?: string;
-  area: 'staged' | 'unstaged' | 'untracked';
+  area: 'staged' | 'unstaged' | 'untracked' | 'working-tree';
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'conflicted' | 'typechanged';
   /** Absent or null when a reliable count is unavailable. */
   additions?: number | null;
@@ -161,7 +161,7 @@ export const RUNTIME_MAX_COMMANDS = 64;
 
 export interface RuntimeCapabilities {
   /** Consume frozen conversation.runtimeSelection before first native input; includes opt-in NCP 1.2 messaging Connectors. */
-  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reviewChanges?: boolean;
+  sessionSelection?: boolean; createSession?: boolean; inspect: boolean; switchModel: boolean; syncConnections: boolean; readFiles: boolean; reviewChanges?: boolean; reviewUncommitted?: boolean;
   reasoning?: boolean; manageProjects?: boolean; updateSettings?: boolean; manageSkills?: boolean; manageMcp?: boolean;
   initialSelection?: boolean; defaultsWhileBusy?: boolean; claudeBypassPermissions?: boolean; inputQueue?: boolean; inputSkills?: boolean;
   asyncQuestions?: boolean; steerInput?: boolean; sideConversation?: 'ephemeral' | 'inline' | 'codex-ephemeral' | 'claude-btw';
@@ -197,6 +197,7 @@ export function runtimeCapabilityExtensionsError(value: Record<string, unknown>)
     const keys = value.nextTurnSettings;
     if (!Array.isArray(keys) || keys.length > 64 || new Set(keys).size !== keys.length || keys.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key))) return 'nextTurnSettings';
   }
+  if ('reviewUncommitted' in value && (typeof value.reviewUncommitted !== 'boolean' || value.reviewUncommitted && value.reviewChanges !== true)) return 'reviewUncommitted';
   if ('nextTurnModel' in value && (typeof value.nextTurnModel !== 'boolean' || value.nextTurnModel && value.switchModel !== true)) return 'nextTurnModel';
   if ('commands' in value) {
     const commands = value.commands;
@@ -282,7 +283,7 @@ export interface RuntimeRequest {
   agentId: string;
   conversationId: string | null;
   kind: RuntimeRequestKind;
-  payload: { projectId?: string; choiceId?: string; fileId?: string; snapshotId?: string; effort?: string; directoryId?: string; name?: string; settings?: CodexOptions & Record<string, RuntimeSettingValue>; claudeSettings?: ClaudeSettings; targetId?: string; enabled?: boolean; targetVersion?: string };
+  payload: { compare?: 'uncommitted'; projectId?: string; choiceId?: string; fileId?: string; snapshotId?: string; effort?: string; directoryId?: string; name?: string; settings?: CodexOptions & Record<string, RuntimeSettingValue>; claudeSettings?: ClaudeSettings; targetId?: string; enabled?: boolean; targetVersion?: string };
   status: RuntimeRequestStatus;
   error: string | null;
   result: { skills?: NonNullable<RuntimeReport['skills']>; file?: { name: string; text: string; truncated: boolean; source: string }; changes?: RuntimeChanges; diff?: RuntimeDiff; listing?: ProjectListing; project?: { id: string; name: string; path: string } } | null;
@@ -295,7 +296,7 @@ export type RuntimeListChangesRequest = Omit<RuntimeRequest, 'kind' | 'conversat
   filePolicy: FilePolicy;
   kind: 'list-changes';
   conversationId: string;
-  payload: Record<string, never>;
+  payload: { compare?: 'uncommitted' };
   result: { changes: RuntimeChanges } | null;
 };
 export type RuntimeReadDiffRequest = Omit<RuntimeRequest, 'kind' | 'conversationId' | 'payload' | 'result'> & {
@@ -343,6 +344,7 @@ export const runtimeErrorMessages: Record<string, string> = {
   unsupported: '当前运行时版本尚不支持这项操作。',
   unavailable: '运行时暂时无法提供这项信息。',
   changes_changed: '工作区改动已变化，请刷新列表后重新查看。',
+  repository_root_required: '此话题的工作目录位于 Git 仓库子目录；请在仓库根目录的话题中查看工作区变更。',
   not_repository: '此话题的工作目录不属于 Git 仓库。',
   git_unavailable: '此主机暂时无法使用 Git。',
   review_unavailable: '当前话题暂时无法查看代码改动。',
