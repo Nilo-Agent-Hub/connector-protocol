@@ -43,6 +43,37 @@ func TestRuntimeCapabilityExtensions(t *testing.T) {
 	}
 }
 
+func TestGenericRuntimeCapabilityExtensions(t *testing.T) {
+	v := loadRuntimeVectors(t)
+	for _, c := range v.Valid {
+		generic := make(map[string]any, len(c))
+		for key, value := range c {
+			if key != "nativeSettings" {
+				generic[key] = value
+			}
+		}
+		if err := ValidateGenericRuntimeCapabilityExtensions(generic); err != nil {
+			t.Fatal(generic, err)
+		}
+	}
+	for _, c := range v.Invalid {
+		if _, native := c["nativeSettings"]; native {
+			continue
+		}
+		if ValidateGenericRuntimeCapabilityExtensions(c) == nil {
+			t.Fatal("accepted", c)
+		}
+	}
+	if contains(GenericRuntimeCapabilityExtensionKeys, "nativeSettings") || !contains(RuntimeCapabilityExtensionKeys, "nativeSettings") {
+		t.Fatal("native settings escaped its compatibility boundary")
+	}
+	for _, native := range []any{"org.example.independent-agent", "", nil, true, map[string]any{"mode": "custom"}} {
+		if ValidateRuntimeCapabilityExtensions(map[string]any{"nativeSettings": native}) == nil {
+			t.Fatal("accepted unknown native settings contract", native)
+		}
+	}
+}
+
 func TestStartsNewTopic(t *testing.T) {
 	v := loadRuntimeVectors(t)
 	for _, c := range v.NewTopic.Cases {

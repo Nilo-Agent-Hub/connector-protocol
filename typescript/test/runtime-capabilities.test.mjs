@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { runtimeCapabilityExtensionsError, startsNewTopicCommand, supportsNextTurnModel } from '../contracts/runtime.ts';
+import { loadContract } from './load-contract.mjs';
+const { runtimeCapabilityExtensionsError, startsNewTopicCommand, supportsNextTurnModel } = await loadContract('runtime');
 
 const vectors = JSON.parse(readFileSync(new URL('../../tests/vectors/runtime-capabilities.json', import.meta.url), 'utf8'));
 

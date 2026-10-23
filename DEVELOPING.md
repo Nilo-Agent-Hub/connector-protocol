@@ -95,6 +95,53 @@ retrying. Deleting or replacing the journal loses its recovery guarantees.
 
 ## 3. Package and check
 
+### Optional runtime management
+
+New TypeScript Connectors import `RuntimeReport`, `RuntimeCapabilities`,
+`RuntimeRequest`, `RuntimeView` and `RuntimeSelection` from
+`typescript/contracts/runtime-core.js` (the emitted module). This module depends
+only on the common file policy contract. It has no adapter types, native settings
+enumerations or provider catalog dependency. The compilable
+[`typescript/examples/custom-runtime.ts`](typescript/examples/custom-runtime.ts)
+shows an independent namespaced identity, generic model/settings reports and
+selection validation. Its helper validates choices; the Connector must still
+implement the durable apply-once and recovery rules described in SPEC.md.
+
+Use `runtimeInstanceId`, `settings.values` / `settings.allowed`,
+`runtimeUpdate`, and generic requests such as `update-settings` and
+`update-runtime`. A setting is a bounded scalar, not an arbitrary configuration
+object. Every setting must be advertised and validated, and management calls
+still require the approved `runtime.manage` grant and its separate credential.
+
+Installed clients may keep importing `typescript/contracts/runtime.js`. That
+facade combines the public core with `runtime-compat.js`, which owns the existing
+native settings types, branded report fields, legacy request names and signed
+Connector update contracts. Native adapters may explicitly import that
+compatibility module. Native contract IDs remain limited to `codex` and `claude`;
+an independent Connector normally omits `nativeSettings`. Choosing an ID does not
+authorize arbitrary native configuration or establish Connector identity.
+
+Go offers `ValidateGenericRuntimeCapabilityExtensions` and
+`GenericRuntimeCapabilityExtensionKeys`; Python offers
+`validate_generic_runtime_capabilities`. These validate only generic capability
+extensions. The enclosing wire validator must continue rejecting unknown fields
+and enforcing grants. Existing `ValidateRuntimeCapabilityExtensions` and
+`validate_runtime_capabilities` compose the generic checks with the native
+contract boundary. Python keeps both layers in the standalone `ncp.py`, so copying
+that file or building the existing echo zipapp needs no extra module.
+
+The SDK split does not change NCP 1.1/1.2 wire formats or require installed clients
+to upgrade. Runtime behavior and gateway opt-in remain governed by SPEC.md.
+Check the public example and legacy/native type compatibility with the same
+pinned compiler used in CI:
+
+```sh
+npm exec --yes --package typescript@5.9.3 -- tsc -p typescript/tsconfig.json
+node --test typescript/test/*.test.mjs
+```
+
+### Executable conformance
+
 ```sh
 python3 conformance.py
 python3 build_echo.py --output ./dist/echo-connector
