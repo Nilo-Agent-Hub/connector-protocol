@@ -538,6 +538,51 @@ or cleared; Hub must not silently discard them. Branded initial-selection fields
 cannot be combined with `runtimeSelection`; explicit legacy requests continue
 through their compatibility path.
 
+### Ordered side-conversation answer snapshots
+
+The existing coding side-conversation result route accepts ordered cumulative
+answer snapshots when its poll lease advertises `resultSnapshots: true`.
+This additive extension requires no additional manifest grant. Before that
+opt-in, Connectors must continue sending the legacy terminal-only result shape;
+older Hubs can reject unknown fields or the `running` status. Upgrade the Hub
+before enabling snapshot results in Connectors.
+
+A result retains the command's `generation`, `sessionId`, `requestId`, and
+`action`, plus the current runtime `instanceId`. `status: "running"` is valid
+only for `action: "ask"`, requires a string `answer` (possibly empty while waiting
+for text), and requires a positive JavaScript-safe integer `sequence`. `answer`
+is the entire current answer, not a delta. The Connector must use increasing
+sequences for every snapshot and terminal result within the tuple
+`(generation, sessionId, requestId, action)`. Retries resend the same sequence and
+payload; intermediate snapshots may be coalesced. Cancel and close are separate
+action identities and their sequences must not be compared with the ask sequence.
+
+The Hub validates that the runtime and full command identity are still current
+before applying a result. Duplicate and lower sequences are ignored. A running
+result updates the current exchange without completing or removing its command;
+a terminal result completes that command. A later running snapshot cannot revive
+a terminal exchange. Cancellation or closure invalidates outstanding ask results,
+including snapshots that were already in flight. Legacy results without a
+sequence remain valid for terminal-only producers; they must not overwrite a
+newer ordered snapshot or revive an exchange already completed. A lost result
+receipt never authorizes repeating native inference.
+
+Optional `model` is the bounded native model identifier confirmed for this side
+request (for example by a native fork response or side-result metadata), not a
+model guessed from the parent conversation or a requested default. Omit it when
+the native API supplies no such fact. An exchange carries its latest accepted
+`sequence` and `model`; the session's optional `model` retains the latest known
+side-conversation model for subsequent waiting states. No synthetic token stream
+or inferred model may substitute for unavailable native information.
+
+Owner `SideView` responses may include `revision`, a nonnegative safe integer
+that increases for state changes across the current `generation`. Clients ignore
+older views within that generation, including late responses to polling or
+mutation requests, and reset their revision tracking when generation changes.
+This view revision is separate from each command's result sequence. Existing
+clients may ignore these optional view fields. Side answers, snapshots and model
+metadata remain isolated from ordinary channel messages and main-session inputs.
+
 These defaults affect future conversations only. They do not change native
 global defaults or existing sessions. Unselected fields use the Connector's
 native defaults. Before starting upstream work, the Connector must validate the
