@@ -164,7 +164,7 @@ Hub display metadata; implementations should ignore unknown response fields.
 | `PATCH /api/connector/messages/{id}` | `{text:string,streaming?:boolean}`; requires `channel.stream` | 200 message |
 | `POST /api/connector/conversations` | `{title:string,clientConversationId?:string}`; requires `conversation.create` | 201 conversation |
 | `PATCH /api/connector/profile` | `{name?:string,avatarEmoji?:string,avatarPreset?:string}`; requires `profile.write` | 200 profile |
-| `POST /api/connector/telemetry` | `{traces:[{messageId:string,stages:{[name]:integer}}]}`; optional | 204 |
+| `POST /api/connector/telemetry` | `{traces?:[{messageId:string,stages:{[name]:integer}}],rollups?:[…]}`; optional | 204 |
 
 Each delivery contains `id`, `conversation` (including its stable `id`),
 `message` (including `id`, `text`, `role`, `seq`) and up to 40 prior delivered
@@ -695,6 +695,23 @@ did not trace are silently dropped.
 | `connector.turn_start` | The upstream call that starts the turn |
 | `connector.model_first_event` | Upstream acceptance → first upstream event of any kind |
 | `connector.output_send` | First output produced → Hub accepted it |
+
+A host process that relays a connector's Hub requests (for example a local
+gateway) may also send up to 100 per-minute `rollups` of what it observed:
+
+```json
+{"source":"core","bucket":"2026-01-01T00:00:00Z","route":"PATCH /api/connector/messages/{id}",
+ "statusClass":2,"count":3,"totalMs":180,"maxMs":90,"bytes":2048,
+ "histogram":[0,0,0,1,2,0,0,0,0,0,0,0,0]}
+```
+
+`source` is `core` for the Hub round trip seen by the host, or `core_ipc` for
+the host's own handling time excluding that round trip. `route` is the method
+and path with every identifier segment replaced by `{id}`; the Hub maps it to a
+declared route and drops unknown routes. `statusClass` is the HTTP status
+divided by 100, or 0 for a transport failure. `histogram` has 13 counts with
+upper bounds of 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000 and 30000
+ms, then +Inf; its counts must sum to `count`. Long polls are not reported.
 
 The Hub answers 204 for any well-formed body. Do not retry a report, and do not
 let reporting delay ACKs or replies. A Hub that does not offer the route
