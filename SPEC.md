@@ -693,7 +693,7 @@ did not trace are silently dropped.
 | `connector.attachments` | Downloading attachments |
 | `connector.configure` | Applying next-turn settings |
 | `connector.turn_start` | The upstream call that starts the turn |
-| `connector.model_first_event` | Upstream acceptance → first upstream event of any kind |
+| `connector.model_first_event` | Upstream acceptance → first upstream output item (reasoning, message or tool); a polling connector includes its polling delay |
 | `connector.output_send` | First output produced → Hub accepted it |
 
 A host process that relays a connector's Hub requests (for example a local
