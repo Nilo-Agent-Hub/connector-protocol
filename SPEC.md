@@ -164,6 +164,7 @@ Hub display metadata; implementations should ignore unknown response fields.
 | `PATCH /api/connector/messages/{id}` | `{text:string,streaming?:boolean}`; requires `channel.stream` | 200 message |
 | `POST /api/connector/conversations` | `{title:string,clientConversationId?:string}`; requires `conversation.create` | 201 conversation |
 | `PATCH /api/connector/profile` | `{name?:string,avatarEmoji?:string,avatarPreset?:string}`; requires `profile.write` | 200 profile |
+| `POST /api/connector/telemetry` | `{traces:[{messageId:string,stages:{[name]:integer}}]}`; optional | 204 |
 
 Each delivery contains `id`, `conversation` (including its stable `id`),
 `message` (including `id`, `text`, `role`, `seq`) and up to 40 prior delivered
@@ -670,6 +671,35 @@ mutation requests, and reset their revision tracking when generation changes.
 This view revision is separate from each command's result sequence. Existing
 clients may ignore these optional view fields. Side answers, snapshots and model
 metadata remain isolated from ordinary channel messages and main-session inputs.
+
+## Performance telemetry (optional)
+
+A connector may report how long it spent on an input so the owner can tell
+connector time from upstream runtime time. Reporting is optional, needs no
+capability and never changes delivery semantics.
+
+`POST /api/connector/telemetry` accepts up to 50 traces per request. Each trace
+names a delivered input `messageId` and a map of stage durations in integer
+milliseconds (0–600000), measured on the connector's own clock. Values are
+durations, not timestamps, so clocks need not be synchronized. Stage names come
+from this closed list; unknown names, out-of-range values and messages the Hub
+did not trace are silently dropped.
+
+| Stage | Duration |
+| --- | --- |
+| `connector.queue_wait` | Delivery received → processing started (per-conversation serialization) |
+| `connector.thread` | Resuming or creating the upstream thread or session |
+| `connector.skills` | Resolving skill or tool inputs |
+| `connector.attachments` | Downloading attachments |
+| `connector.configure` | Applying next-turn settings |
+| `connector.turn_start` | The upstream call that starts the turn |
+| `connector.model_first_event` | Upstream acceptance → first upstream event of any kind |
+| `connector.output_send` | First output produced → Hub accepted it |
+
+The Hub answers 204 for any well-formed body. Do not retry a report, and do not
+let reporting delay ACKs or replies. A Hub that does not offer the route
+answers 404; stop reporting for that process. Reports carry identifiers and
+durations only: never include message text, file names, paths or credentials.
 
 ## Delivery recovery and idempotency
 
