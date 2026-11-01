@@ -713,6 +713,41 @@ divided by 100, or 0 for a transport failure. `histogram` has 13 counts with
 upper bounds of 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000 and 30000
 ms, then +Inf; its counts must sum to `count`. Long polls are not reported.
 
+Rollups may additionally include `code` and `lastAt` for failure diagnosis.
+These fields are optional and do not require a protocol-minor change. Older
+receivers may ignore them; missing `code` means legacy/unclassified observations,
+not success. The aggregation key includes `code`, so failures with different
+codes must not be merged before reporting. Existing timing and count fields keep
+their meaning; `core` and `core_ipc` describe the same call and must not be added
+as two independent failures.
+
+`code` is empty for status classes 1–3. For classes 0, 4 and 5, use only the
+following closed vocabulary; any other value is normalized to `unclassified`:
+
+- Relay-local: `hub_unreachable`, `request_timeout`, `request_canceled`,
+  `stream_failed`, `transfer_timeout`, `session_rejected`,
+  `invalid_connector_session`, `management_credential_required`.
+- Hub response: `report_target_deleted`, `not_found`, `forbidden`, `unauthorized`,
+  `conflict`, `busy`, `validation_error`, `rate_limited`, `internal_error`,
+  `unavailable`, `session_expired`, `agent_offline`, `reconnect`.
+- `unclassified`: the observer has no recognized fixed code.
+
+Only classify errors already observed while performing the business request.
+Do not make a diagnostic request, replay a write, consume an additional response
+stream, or expose the raw response/error message. In particular, an upstream
+response may contain arbitrary strings even in an `error` or `code` field.
+`statusClass` remains the observed HTTP class (or 0 when no HTTP response was
+obtained); a local fault code is not proof that the business action never began.
+
+`lastAt`, when present, is the latest observation time in RFC3339 UTC, within
+`[bucket, bucket + 1 minute)`. Assign the minute using the observation's completion
+time. Receivers reject an invalid/out-of-bucket timestamp and apply their normal
+retention and future-clock tolerance (at most one minute). Missing timestamps
+remain unknown rather than being replaced by ingestion time. This timestamp
+summarizes a bucket; it does not establish synchronized clocks or a complete
+error history. Long polls remain excluded. Lossy telemetry and dropped reports
+must never be presented as proof that no errors occurred.
+
 The Hub answers 204 for any well-formed body. Do not retry a report, and do not
 let reporting delay ACKs or replies. A Hub that does not offer the route
 answers 404; stop reporting for that process. Reports carry identifiers and
