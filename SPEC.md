@@ -164,7 +164,7 @@ Hub display metadata; implementations should ignore unknown response fields.
 | `PATCH /api/connector/messages/{id}` | `{text:string,streaming?:boolean}`; requires `channel.stream` | 200 message |
 | `POST /api/connector/conversations` | `{title:string,clientConversationId?:string}`; requires `conversation.create` | 201 conversation |
 | `PATCH /api/connector/profile` | `{name?:string,avatarEmoji?:string,avatarPreset?:string}`; requires `profile.write` | 200 profile |
-| `POST /api/connector/telemetry` | `{traces?:[{messageId:string,stages:{[name]:integer}}],rollups?:[…]}`; optional | 204 |
+| `POST /api/connector/telemetry` | `{traces?:[{messageId:string,stages:{[name]:integer}}],rollups?:[…],diagnostics?:[…]}`; optional | 204 |
 
 Each delivery contains `id`, `conversation` (including its stable `id`),
 `message` (including `id`, `text`, `role`, `seq`) and up to 40 prior delivered
@@ -748,10 +748,50 @@ summarizes a bucket; it does not establish synchronized clocks or a complete
 error history. Long polls remain excluded. Lossy telemetry and dropped reports
 must never be presented as proof that no errors occurred.
 
+### Host fault summaries
+
+A connector may also send up to 32 `diagnostics` entries in the same optional
+telemetry body. These describe already-observed host faults, separately from
+HTTP request rollups; they have no request duration or HTTP status:
+
+```json
+{"diagnostics":[{"code":"health_write_capacity","bucket":"2026-01-01T00:00:00Z",
+ "count":3,"lastAt":"2026-01-01T00:00:42Z"}]}
+```
+
+The closed code vocabulary is `health_write_capacity`, `health_write_permission`,
+`health_write_missing`, `health_write_file_type`, `health_write_io`,
+`health_write_unclassified`, `native_unavailable`, `gateway_unreachable`,
+`auth_failed`, `instance_conflict`, and `recovery_required`. Unknown codes are
+dropped. Do not send raw errno values, exception text, arbitrary labels, paths,
+or identifiers. The receiver binds observations to the authenticated tenant and
+agent; an identity supplied in this body never selects a different reporter.
+
+`bucket` is the observation time truncated to a UTC minute. `count` is an
+integer from 1 to 1000000; `lastAt` is required and lies in
+`[bucket, bucket + 1 minute)`. Receivers reject invalid timestamps, buckets older
+than 30 days and observation times more than one minute in the future. Senders
+aggregate by bucket and code with bounded memory, make at most one diagnostic
+attempt per minute using a monotonic clock, drop failed reports, and never
+persist a diagnostic retry queue. Telemetry's own transport or response errors
+must not create more diagnostics. A receiver may retain these summaries only
+in bounded operational logs; receipt does not promise database retention.
+
+Counts are observed failure occurrences, not distinct incidents, failed HTTP
+requests, or proof of execution outcome. Repeated failed health probes can
+increase the count. Missing reports and recovery do not prove an error-free
+interval; do not synthesize successful samples or replay business operations.
+The optional field does not change the protocol minor version. Older receivers
+may ignore unknown members or reject them with 400. Send diagnostic batches
+separately from existing trace/rollup batches; disable diagnostic reporting for
+the process on 400 or 404, without disabling otherwise-supported traces. This
+keeps an older receiver from repeatedly rejecting the new extension.
+
 The Hub answers 204 for any well-formed body. Do not retry a report, and do not
 let reporting delay ACKs or replies. A Hub that does not offer the route
-answers 404; stop reporting for that process. Reports carry identifiers and
-durations only: never include message text, file names, paths or credentials.
+answers 404; stop reporting for that process. Reports carry only the documented
+identifiers, durations, counters and fixed codes: never include message text,
+file names, paths or credentials.
 
 ## Delivery recovery and idempotency
 
