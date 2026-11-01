@@ -781,8 +781,11 @@ Counts are observed failure occurrences, not distinct incidents, failed HTTP
 requests, or proof of execution outcome. Repeated failed health probes can
 increase the count. Missing reports and recovery do not prove an error-free
 interval; do not synthesize successful samples or replay business operations.
-The optional field is compatible with older receivers that ignore unknown
-members and does not change the protocol minor version.
+The optional field does not change the protocol minor version. Older receivers
+may ignore unknown members or reject them with 400. Send diagnostic batches
+separately from existing trace/rollup batches; disable diagnostic reporting for
+the process on 400 or 404, without disabling otherwise-supported traces. This
+keeps an older receiver from repeatedly rejecting the new extension.
 
 The Hub answers 204 for any well-formed body. Do not retry a report, and do not
 let reporting delay ACKs or replies. A Hub that does not offer the route
