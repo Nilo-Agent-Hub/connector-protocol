@@ -68,6 +68,8 @@ export const isCodexRuntimeVersion = isRuntimeVersion;
 export type RuntimeNativeSettings = 'codex' | 'claude';
 export interface RuntimeCapabilities extends Omit<Core.RuntimeCapabilities, 'sideConversation'> {
   claudeBypassPermissions?: boolean;
+  /** Why full trust is unavailable on this host; only `root` exists today. */
+  claudeBypassBlocked?: 'root';
   nativeSettings?: RuntimeNativeSettings;
   sideConversation?: Core.RuntimeCapabilities['sideConversation'] | 'codex-ephemeral' | 'claude-btw';
 }
