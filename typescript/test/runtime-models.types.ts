@@ -8,7 +8,7 @@ import { report, selection, view } from '../examples/custom-runtime.js';
 const legacyReport: Legacy.RuntimeReport = report;
 const legacyView: Legacy.RuntimeView = view;
 const nativeCapabilities: Legacy.RuntimeCapabilities = {
-  ...report.capabilities, nativeSettings: 'codex', claudeBypassPermissions: false, sideConversation: 'claude-btw',
+  ...report.capabilities, nativeSettings: 'codex', claudeBypassPermissions: false, claudeBypassBlocked: 'root', sideConversation: 'claude-btw',
 };
 const nativeReport: Legacy.RuntimeReport = { ...legacyReport, capabilities: nativeCapabilities, claude: { settings: { permissionMode: 'plan' }, source: 'configuration', conversion: 'native' } };
 assertRuntimeSelection(selection, nativeReport);
