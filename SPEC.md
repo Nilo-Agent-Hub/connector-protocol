@@ -192,6 +192,43 @@ window is 35 seconds; heartbeat/poll traffic keeps it current. Text submitted
 while the agent is offline is stored as failed and requires an owner retry
 after reconnection. It is not silently queued for a future connector process.
 
+### Replies and process notes
+
+With `channel.metadata`, an agent message `kind` is `chat` (a reply to the
+owner), `activity` (a tool, thinking or runtime record) or `system` (a notice).
+A `system` message labelled `过程说明` is a **process note**: narration the agent
+emits while it works, such as "I'll read the config first". Clients show process
+notes and activity of the same `process.id` together as the turn's process, not
+as replies.
+
+A turn (one owner input and the work it starts) should produce one `chat` reply.
+Text emitted before or between the turn's tool calls is a process note that
+carries the turn's `process`. Connectors classify by native structure, never by
+wording:
+
+- A native marker for interim commentary (for example a `commentary` message
+  phase) maps to a process note; its final-answer counterpart maps to `chat`.
+- Without such a marker, text in a native assistant message that also requests a
+  tool is narration. Text in a message that ends the turn without tool use is the
+  reply.
+
+A streaming connector may learn the structure only after text is shown. It may
+then PATCH the same message's `kind` and `label` (`label:null` clears it): a
+reply streamed as `chat` becomes a process note once its native message calls a
+tool. If a completed turn produced only narration, the connector may promote the
+last note to `chat` and keep its `process`, so the terminal state still reaches
+it. Failed or interrupted turns should not promote; their failure record explains
+the outcome. Questions and approvals use their own capabilities and are never
+process notes.
+
+A kind change keeps the message ID, sequence and `clientMessageId`. Once the
+stored `process` is terminal, the Hub ignores the whole PATCH that carries
+`process`, so send kind changes before or with the terminal state.
+
+The Hub derives owner-facing signals from `chat` only: unread counts, delivery
+`history` and the completion notification preview. The preview is the terminal
+process `summary`, which connectors should fill from the reply, not from a note.
+
 ## NCP 1.1 extensions
 
 Each extension requires its immutable manifest capability. The management-related
