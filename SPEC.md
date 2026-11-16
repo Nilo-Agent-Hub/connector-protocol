@@ -240,6 +240,7 @@ request this capability only if the Connector needs to configure its runtime.
 | Capability | Routes / additional fields |
 | --- | --- |
 | `channel.attachments` | `POST /api/attachments`, `GET /api/attachments/{id}/content`; message `attachmentIds` |
+| `channel.interactions` | Native channel request publication, polling and resolution with message credentials; request-bound owner responses (see Structured channel interactions) |
 | `channel.metadata` | message `kind`, `label`, `process`, `runtimeActivity`, `proactive`; the corresponding PATCH metadata |
 | `runtime.manage` | `GET /api/connector/runtime/inbox`, `POST /api/connector/runtime/report`, `POST /api/connector/runtime/requests/{id}/result`, `GET /api/connector/runtime/connections`, `POST /api/connector/runtime/connections/ack` |
 | `coding.sessions` | `POST /api/connector/coding/connect`, `POST /api/connector/coding/session`, `POST /api/connector/coding/queue/claim`, coding side-conversation poll/result; inbox `runtimeInstanceId` or `codingInstanceId`; delivery ACK `requeue`; conversation creation `projectId` |
@@ -1021,3 +1022,48 @@ New message metadata uses `agent_hub_kind` and `agent_hub_label`; readers retain
 `agent_inbox_kind` and `agent_inbox_label` as fallbacks for stored messages.
 The signed v1 Connector release repository and signature domain remain immutable
 compatibility identities. They are not names for new products or packages.
+
+### Structured channel interactions (optional)
+
+`channel.interactions` is an additive NCP 1.2 capability. A connector must
+negotiate it before use; older gateways reject unknown capabilities explicitly.
+It uses message credentials and does not grant `runtime.manage` or `coding.*`.
+Wire types are in `typescript/contracts/channel-interactions.ts`.
+
+- `POST /api/connector/interactions/session {epoch}`: register a UUID identifying
+  this native process lifetime. Same epoch is idempotent; replacement retires
+  older epochs and their open requests. A retired epoch cannot be reactivated.
+- `POST /api/connector/conversations/{id}/interactions`: publish a version 1
+  request. `clientRequestId` is a stable UUID bound to one native request in the
+  epoch. Reuse with different content is a conflict. Returns the saved request
+  and its timeline `messageId`. At most 100 open requests per agent.
+- `GET /api/connector/interactions?epoch=UUID`: read open requests and submitted
+  responses for that epoch. This is independent of ordinary inbox delivery.
+- `POST /api/connector/interactions/{id}/resolve {epoch, resolution}`: settle
+  the request. Acknowledgement is idempotent for the same resolution; conflicting
+  terminal writes fail. Approvals/answers require a submitted response.
+- Owner `GET /api/interactions/{id}` and `POST .../{id}/respond` return the
+  request. A response has `clientRequestId`, `actionId`, and `answers` (field ID
+  to array of values). Same response ID/content replays its receipt; another
+  decision or response ID cannot overwrite a submission. This never enqueues a
+  chat command or starts a model turn.
+
+All operations enforce tenant, agent, conversation and current epoch boundaries.
+Requests expire at `expiresAt` (future, at most 24 hours at creation). The native
+host remains authoritative and may expire earlier. Connectors MUST check that
+the exact original request is still pending, validate its declared choices, and
+resolve by native identity; never fall back to a session's oldest request.
+`submitted` means the gateway stored the decision, `resolved` means the connector
+reported the native outcome. Neither proves command execution succeeded.
+Uncertain native acceptance must never be retried under another identity.
+
+Each request has 1–8 actions and 0–10 fields, each with at most 20 options.
+Values and IDs are distinct from presentation labels. Only declared options are
+accepted unless `allowCustom`; text/custom values are limited to 4000 characters.
+`single-select` allows one answer; `multi-select` respects `maxSelections`.
+Reject/skip actions do not carry answers. Secret fields are unsupported.
+Text-only compatibility messages are informational; clients MUST NOT derive
+executable actions from their wording. A client that does not implement this
+extension keeps the timeline text readable without offering an approval action.
+
+Resolution receipts must agree with the selected action: `approved` requires a command and an `accept` action; `rejected` requires `reject`; `answered` requires `submit` or `accept`; `skipped` requires `other`. A missing native receipt is not execution success. Interaction details and responses follow the associated message retention policy; a retained summary must not expose them through direct reads. Retired epoch tombstones remain until the Agent is removed, so a stale process cannot reactivate a retired UUID.

@@ -43,3 +43,13 @@ func TestManifestValidationAndApprovalIdentity(t *testing.T) {
 		t.Fatal("upgraded version reuses owner approval")
 	}
 }
+
+func TestChannelInteractionsIsOptionalMessageCapability(t *testing.T) {
+	m := Manifest{SchemaVersion: 1, ID: "org.example.channel", Name: "Channel", Version: "1.0.0", Protocol: Protocol{Major: 1, Minor: 2}, Capabilities: []string{"channel.receive", "channel.send", "channel.interactions"}}
+	if err := m.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Has("channel.interactions") || m.Has("runtime.manage") {
+		t.Fatal("channel interactions require no runtime management")
+	}
+}

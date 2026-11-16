@@ -64,7 +64,7 @@ func (m Manifest) Validate() error {
 		seen[capability] = true
 		switch capability {
 		case "channel.receive", "channel.send", "channel.stream", "conversation.create", "profile.write":
-		case "channel.attachments", "channel.metadata", "runtime.manage", "native.sessions", "coding.sessions", "coding.actions", "coding.approvals", "files.read", "files.write", "media.generate", "questions", "stickers":
+		case "channel.attachments", "channel.metadata", "channel.interactions", "runtime.manage", "native.sessions", "coding.sessions", "coding.actions", "coding.approvals", "files.read", "files.write", "media.generate", "questions", "stickers":
 			if m.Protocol.Minor < 1 {
 				return fmt.Errorf("capability requires NCP 1.1: %s", capability)
 			}
@@ -105,4 +105,4 @@ func (m Manifest) Digest() string {
 }
 
 // Capabilities is the versioned, vendor-independent grant vocabulary.
-var Capabilities = []string{"channel.receive", "channel.send", "channel.stream", "conversation.create", "profile.write", "channel.attachments", "channel.metadata", "runtime.manage", "native.sessions", "coding.sessions", "coding.actions", "coding.approvals", "files.read", "files.write", "media.generate", "questions", "stickers"}
+var Capabilities = []string{"channel.receive", "channel.send", "channel.stream", "conversation.create", "profile.write", "channel.attachments", "channel.metadata", "channel.interactions", "runtime.manage", "native.sessions", "coding.sessions", "coding.actions", "coding.approvals", "files.read", "files.write", "media.generate", "questions", "stickers"}

@@ -17,6 +17,7 @@ export const connectorCapabilityLabels: Readonly<Record<string, string>> = {
   'conversation.create': '主动创建此 Agent 的话题',
   'profile.write': '修改此 Agent 的名称和头像',
   'channel.attachments': '收发此 Agent 的附件',
+  'channel.interactions': '处理原生审批、确认和提问',
   'channel.metadata': '同步工具进度与消息状态',
   'runtime.manage': '管理此 Agent 的运行环境',
   'native.sessions': '同步和连接原生会话',
