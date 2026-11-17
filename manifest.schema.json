@@ -66,6 +66,7 @@
           "profile.write",
           "channel.attachments",
           "channel.metadata",
+          "channel.interactions",
           "runtime.manage",
           "native.sessions",
           "coding.sessions",

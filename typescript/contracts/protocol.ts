@@ -180,6 +180,8 @@ export interface MessageProcess {
   };
 }
 export interface Message {
+  /** Native channel request; text never determines available actions. */
+  interaction?: import('./channel-interactions.js').ChannelInteraction;
   processSummary?: { count: number; detailsExpired: true; expiredAt: string };
   /** Native provider names belong to the connector; retain unfamiliar channels. */
   origin?: { provider: string; itemId: string; historical: boolean } | null;
