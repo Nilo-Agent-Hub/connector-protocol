@@ -5,10 +5,12 @@ Use this repository's [issues](https://github.com/Nilo-Agent-Hub/connector-proto
 ## Issue to delivery
 
 1. Open a bug, feature, or maintenance issue with scope and verifiable acceptance criteria. Ideas may remain in the backlog until triaged. Small wording fixes can go directly to a PR.
-2. Create an isolated branch or worktree from current `origin/main`, such as `fix/123-short-description` or `feat/123-short-description`; keep unrelated work separate.
+2. Start each task in a separate worktree or clone from the latest `origin/main`. For agent-created branches, use `<agent>/<issue-number>-<short-name>` with this repository's issue number and a lowercase, hyphenated English name. Examples include `codex/123-retry-timeout`, `claude/124-settings-ui`, and `antigravity/125-windows-smoke`. For a minor wording fix that can go straight to a PR, the issue number is optional (e.g. `claude/fix-settings-copy`).
 3. Open a draft PR early. Describe the problem, resulting behavior, related issues, evidence, and compatibility implications; mark it ready after implementation and applicable checks.
 4. Review the existing CI results for the current commit, resolve failures and pending acceptance, then merge into `main`, preferably with squash, and remove the merged branch. Unstarted, skipped, blocked, or failed CI is not a pass. A sole maintainer cannot approve their own PR; document self-review without presenting it as independent approval.
 5. Follow the existing versioning and publication process, then record actual release and acceptance evidence. Merging and building do not authorize production deployment or operations on user accounts/devices.
+
+Use one branch and one PR per issue by default. Split independently reviewable parallel work into separate issues. The prefix identifies the agent that created the branch. On handoff, update the issue or PR assignee, record who is taking over and what remains in the original PR, and continue on its branch. Existing branches keep their names.
 
 For changes spanning repositories, use `Refs` for the overall public tracking issue and close it only after every deliverable and end-to-end acceptance is complete. Use `Closes #123` only for an issue fully delivered by that PR. Never link private implementation work from this repository.
 
