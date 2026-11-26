@@ -113,6 +113,8 @@ export interface CodingInputSelection {
   expectedTurnId?: string;
 }
 export interface CodingInput extends CodingInputSelection {
+  /** First observed native values for the turn that accepted this input. */
+  runtime?: import('./coding.js').TurnRuntime | null;
   nativeAccepted?: boolean;
   state: 'queued' | 'dispatching' | 'accepted' | 'running' | 'completed' | 'interrupted' | 'failed' | 'uncertain' | 'cancelled';
   turnId?: string;

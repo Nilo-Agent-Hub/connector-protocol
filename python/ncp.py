@@ -35,6 +35,22 @@ RUNTIME_MAX_COMMANDS = 64
 _RUNTIME_COMMAND = re.compile(r"/[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
 
+def validate_turn_runtime(value) -> None:
+    """Validate the nullable observation shared by coding sessions and inputs."""
+    if value is None:
+        return
+    if not isinstance(value, dict) or value.keys() != {"model", "effort", "settings"}:
+        raise ValueError("turnRuntime")
+    for key, limit in (("model", 256), ("effort", 64)):
+        text = value[key]
+        if text is not None and (not isinstance(text, str) or not 1 <= len(text) <= limit):
+            raise ValueError(key)
+    settings = value["settings"]
+    if (not isinstance(settings, dict) or len(settings) > 16
+            or any(not isinstance(k, str) or not isinstance(v, (str, bool)) for k, v in settings.items())):
+        raise ValueError("settings")
+
+
 def _bounded_text(value) -> bool:
     return isinstance(value, str) and 1 <= len(value) <= 200
 

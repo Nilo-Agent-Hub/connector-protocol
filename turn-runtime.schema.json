@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coding turn runtime observation",
+  "type": [
+    "object",
+    "null"
+  ],
+  "required": [
+    "model",
+    "effort",
+    "settings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "effort": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "settings": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": [
+          "string",
+          "boolean"
+        ]
+      }
+    }
+  }
+}

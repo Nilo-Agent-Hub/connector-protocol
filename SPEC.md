@@ -1067,3 +1067,11 @@ executable actions from their wording. A client that does not implement this
 extension keeps the timeline text readable without offering an approval action.
 
 Resolution receipts must agree with the selected action: `approved` requires a command and an `accept` action; `rejected` requires `reject`; `answered` requires `submit` or `accept`; `skipped` requires `other`. A missing native receipt is not execution success. Interaction details and responses follow the associated message retention policy; a retained summary must not expose them through direct reads. Retired epoch tombstones remain until the Agent is removed, so a stale process cannot reactivate a retired UUID.
+
+### Native coding turn observations
+
+A coding session may report `turnRuntime` for its current or most recent native
+turn. A coding input may include `runtime`, the first observation associated
+with its own executing turn. Both fields follow [the turn runtime schema](turn-runtime.schema.json).
+An absent or null observation means unavailable. Report resolved values and
+omit unknown setting keys. Readers must accept older sessions and inputs.

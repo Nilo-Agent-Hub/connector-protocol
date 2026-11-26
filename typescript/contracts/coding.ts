@@ -2,7 +2,14 @@
 /** Generic coding-session wire types shared by every coding Agent. */
 export interface CodingProject { id: string; name: string; path?: string; host?: string; hidden?: boolean }
 export type CodingSessionState = 'idle' | 'running' | 'waiting' | 'interrupted' | 'failed' | 'unknown';
+export interface TurnRuntime {
+  model: string | null;
+  effort: string | null;
+  settings: Record<string, string | boolean>;
+}
 export interface CodingSession {
+  /** Native values for the current or most recent turn. */
+  turnRuntime?: TurnRuntime | null;
   inputMessageIds?: string[];
   inputUncertain?: boolean;
   /** Optional user-visible title reported by the native runtime thread. */

@@ -176,3 +176,35 @@ func contains(list []string, value string) bool {
 	}
 	return false
 }
+
+// ValidateTurnRuntime validates a non-null, decoded native turn observation.
+// The enclosing session or input may omit the observation or send null.
+func ValidateTurnRuntime(o map[string]any) error {
+	if len(o) != 3 {
+		return fmt.Errorf("invalid turnRuntime")
+	}
+	for key, limit := range map[string]int{"model": 256, "effort": 64} {
+		value, exists := o[key]
+		if !exists {
+			return fmt.Errorf("missing %s", key)
+		}
+		if value != nil {
+			s, ok := value.(string)
+			if !ok || len(s) == 0 || utf8.RuneCountInString(s) > limit {
+				return fmt.Errorf("invalid %s", key)
+			}
+		}
+	}
+	settings, ok := o["settings"].(map[string]any)
+	if !ok || settings == nil || len(settings) > 16 {
+		return fmt.Errorf("invalid turn settings")
+	}
+	for _, v := range settings {
+		switch v.(type) {
+		case bool, string:
+		default:
+			return fmt.Errorf("invalid turn setting value")
+		}
+	}
+	return nil
+}
