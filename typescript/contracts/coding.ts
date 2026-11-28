@@ -56,7 +56,7 @@ export interface CodingAction {
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'uncertain';
   error: string | null;
 }
-export type CodingQueuePauseReason = 'interrupted' | 'failed' | 'uncertain' | 'unknown' | 'disabled';
+export type CodingQueuePauseReason = 'interrupted' | 'failed' | 'uncertain' | 'unknown' | 'disabled' | 'quota';
 export interface CodingInputQueue {
   paused: boolean;
   /** Present while paused; only messages queued before the pause are held. */
@@ -68,6 +68,8 @@ export interface CodingInputQueue {
   /** Queued inputs held behind the pause boundary. */
   held?: number;
   heldIds?: string[];
+  /** Owner-scheduled automatic resume while paused for quota (RFC 3339). */
+  resumeAt?: string | null;
 }
 export interface CodingView {
   inputCapabilities?: { queue: boolean; skills: boolean; steer?: boolean };

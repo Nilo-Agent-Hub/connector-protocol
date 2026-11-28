@@ -122,6 +122,10 @@ export interface CodingInput extends CodingInputSelection {
   anchorSeq?: number;
   /** The owner settled an uncertain execution; it no longer counts as backlog. */
   reviewed?: boolean;
+  /** Classified from the session `failure` that ended this input's turn. */
+  failureReason?: 'quota' | (string & {});
+  /** Present with `failureReason: 'quota'`. */
+  quota?: { resetsAt: string | null; scope: string | null };
 }
 /** Native tool output, independent of Git and remote file-read authorization. */
 export interface RuntimeEditDetail {
