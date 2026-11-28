@@ -1075,3 +1075,30 @@ turn. A coding input may include `runtime`, the first observation associated
 with its own executing turn. Both fields follow [the turn runtime schema](turn-runtime.schema.json).
 An absent or null observation means unavailable. Report resolved values and
 omit unknown setting keys. Readers must accept older sessions and inputs.
+
+### Classified turn failures
+
+A coding session whose `state` is `failed` may add `failure`, a classified
+reason the owner can act on, next to the free-text `error`:
+
+```json
+{"reason": "quota", "resetsAt": "2026-11-28T10:40:00Z", "scope": "Antigravity individual quota"}
+```
+
+- `reason` is `quota`: the account behind the runtime has used up a usage
+  allowance, and repeating the same input on the same model fails until it is
+  restored. Generic rate limits, overload and HTTP 429 without a native quota
+  signal are not `quota`.
+- `resetsAt` is an RFC 3339 time when the runtime said the allowance returns,
+  or null when it did not say. Convert relative native wording ("resets in
+  3h59m46s") against the observation time.
+- `scope` is null or a short label (at most 60 characters) naming which
+  allowance ran out, such as a plan window or model group. It is display text,
+  not an identifier.
+
+A gateway that reads it returns `sessionFailure:true` in the coding-connect
+response. Without that flag a Connector must omit `failure`; older gateways
+reject unknown session keys. Report `failure` only with `state: "failed"` and only from a structured native
+signal or an exact native notice; do not infer it from model prose. Omit the
+field or send null otherwise. Readers must accept sessions without it and must
+treat an unknown `reason` as an unclassified failure.

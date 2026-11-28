@@ -7,7 +7,17 @@ export interface TurnRuntime {
   effort: string | null;
   settings: Record<string, string | boolean>;
 }
+/** Classified reason of a failed turn; unknown reasons read as unclassified. */
+export interface SessionFailure {
+  reason: 'quota' | (string & {});
+  /** RFC 3339; null when the runtime did not say. */
+  resetsAt?: string | null;
+  /** Short display label of the allowance, at most 60 characters. */
+  scope?: string | null;
+}
 export interface CodingSession {
+  /** Only with `state: 'failed'`. */
+  failure?: SessionFailure | null;
   /** Native values for the current or most recent turn. */
   turnRuntime?: TurnRuntime | null;
   inputMessageIds?: string[];
@@ -46,7 +56,7 @@ export interface CodingAction {
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'uncertain';
   error: string | null;
 }
-export type CodingQueuePauseReason = 'interrupted' | 'failed' | 'uncertain' | 'unknown' | 'disabled';
+export type CodingQueuePauseReason = 'interrupted' | 'failed' | 'uncertain' | 'unknown' | 'disabled' | 'quota';
 export interface CodingInputQueue {
   paused: boolean;
   /** Present while paused; only messages queued before the pause are held. */
@@ -58,6 +68,8 @@ export interface CodingInputQueue {
   /** Queued inputs held behind the pause boundary. */
   held?: number;
   heldIds?: string[];
+  /** Owner-scheduled automatic resume while paused for quota (RFC 3339). */
+  resumeAt?: string | null;
 }
 export interface CodingView {
   inputCapabilities?: { queue: boolean; skills: boolean; steer?: boolean };

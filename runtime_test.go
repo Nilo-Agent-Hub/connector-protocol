@@ -4,6 +4,7 @@ package connectorprotocol
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,20 @@ func TestProtocolMinorTwoAccepted(t *testing.T) {
 	m.Protocol.Minor = 3
 	if m.Validate() == nil {
 		t.Fatal("future minor accepted")
+	}
+}
+
+func TestValidateSessionFailure(t *testing.T) {
+	good := []map[string]any{{"reason": "quota"}, {"reason": "quota", "resetsAt": "2026-11-28T10:40:00Z", "scope": "5 小时额度"}, {"reason": "future", "resetsAt": nil, "scope": nil}}
+	for _, v := range good {
+		if err := ValidateSessionFailure(v); err != nil {
+			t.Fatalf("%v: %v", v, err)
+		}
+	}
+	bad := []map[string]any{{}, {"reason": ""}, {"reason": "quota", "extra": 1}, {"reason": "quota", "resetsAt": "soon"}, {"reason": "quota", "scope": " "}, {"reason": "quota", "scope": strings.Repeat("x", 61)}}
+	for _, v := range bad {
+		if ValidateSessionFailure(v) == nil {
+			t.Fatalf("accepted %v", v)
+		}
 	}
 }
