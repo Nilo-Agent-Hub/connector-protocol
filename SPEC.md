@@ -1096,7 +1096,9 @@ reason the owner can act on, next to the free-text `error`:
   allowance ran out, such as a plan window or model group. It is display text,
   not an identifier.
 
-Report `failure` only with `state: "failed"` and only from a structured native
+A gateway that reads it returns `sessionFailure:true` in the coding-connect
+response. Without that flag a Connector must omit `failure`; older gateways
+reject unknown session keys. Report `failure` only with `state: "failed"` and only from a structured native
 signal or an exact native notice; do not infer it from model prose. Omit the
 field or send null otherwise. Readers must accept sessions without it and must
 treat an unknown `reason` as an unclassified failure.
