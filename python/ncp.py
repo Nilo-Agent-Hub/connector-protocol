@@ -12,6 +12,7 @@ import ipaddress
 import json
 import math
 import os
+from datetime import datetime
 from pathlib import Path
 import re
 import sqlite3
@@ -49,6 +50,28 @@ def validate_turn_runtime(value) -> None:
     if (not isinstance(settings, dict) or len(settings) > 16
             or any(not isinstance(k, str) or not isinstance(v, (str, bool)) for k, v in settings.items())):
         raise ValueError("settings")
+
+
+def validate_session_failure(value) -> None:
+    """Validate the nullable classified failure of a failed coding session."""
+    if value is None:
+        return
+    if not isinstance(value, dict) or not value.keys() <= {"reason", "resetsAt", "scope"}:
+        raise ValueError("failure")
+    reason = value.get("reason")
+    if not isinstance(reason, str) or not 1 <= len(reason) <= 64:
+        raise ValueError("reason")
+    resets = value.get("resetsAt")
+    if resets is not None:
+        try:
+            if not isinstance(resets, str) or "T" not in resets:
+                raise ValueError
+            datetime.fromisoformat(resets.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError("resetsAt") from None
+    scope = value.get("scope")
+    if scope is not None and (not isinstance(scope, str) or not scope.strip() or len(scope) > 60):
+        raise ValueError("scope")
 
 
 def _bounded_text(value) -> bool:

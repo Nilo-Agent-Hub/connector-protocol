@@ -6,6 +6,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -204,6 +205,36 @@ func ValidateTurnRuntime(o map[string]any) error {
 		case bool, string:
 		default:
 			return fmt.Errorf("invalid turn setting value")
+		}
+	}
+	return nil
+}
+
+// ValidateSessionFailure validates a non-null, decoded classified failure of a
+// failed coding session. Unknown reasons are accepted and read as unclassified.
+func ValidateSessionFailure(o map[string]any) error {
+	for key := range o {
+		if key != "reason" && key != "resetsAt" && key != "scope" {
+			return fmt.Errorf("invalid failure key %s", key)
+		}
+	}
+	reason, ok := o["reason"].(string)
+	if !ok || len(reason) == 0 || len(reason) > 64 {
+		return fmt.Errorf("invalid failure reason")
+	}
+	if v := o["resetsAt"]; v != nil {
+		s, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("invalid failure resetsAt")
+		}
+		if _, err := time.Parse(time.RFC3339Nano, s); err != nil {
+			return fmt.Errorf("invalid failure resetsAt")
+		}
+	}
+	if v := o["scope"]; v != nil {
+		s, ok := v.(string)
+		if !ok || strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > 60 {
+			return fmt.Errorf("invalid failure scope")
 		}
 	}
 	return nil

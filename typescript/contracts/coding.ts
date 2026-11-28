@@ -7,7 +7,17 @@ export interface TurnRuntime {
   effort: string | null;
   settings: Record<string, string | boolean>;
 }
+/** Classified reason of a failed turn; unknown reasons read as unclassified. */
+export interface SessionFailure {
+  reason: 'quota' | (string & {});
+  /** RFC 3339; null when the runtime did not say. */
+  resetsAt?: string | null;
+  /** Short display label of the allowance, at most 60 characters. */
+  scope?: string | null;
+}
 export interface CodingSession {
+  /** Only with `state: 'failed'`. */
+  failure?: SessionFailure | null;
   /** Native values for the current or most recent turn. */
   turnRuntime?: TurnRuntime | null;
   inputMessageIds?: string[];
